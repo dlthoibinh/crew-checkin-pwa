@@ -1,92 +1,103 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <title>Dashboard – Crew Check-In</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1.0">
-  <!-- Leaflet CSS -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-  <style>
-    body, html { margin:0; padding:0; height:100%; }
-    #controls {
-      padding:8px;
-      background:#f0f0f0;
-      display:flex;
-      align-items:center;
-      gap:8px;
-    }
-    #map { width:100%; height:calc(100% - 48px); }
-    select, button { padding:6px 10px; font-size:14px; }
-  </style>
+<meta charset="utf-8">
+<title>Crew Check-In Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html,body{margin:0;height:100%}
+  #map{height:calc(100% - 48px)}
+  #bar{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid #ddd;font:14px/1.4 sans-serif}
+  select,button{padding:4px 10px;font-size:14px}
+  .err{color:#c00;font-size:13px}
+</style>
 </head>
 <body>
 
-  <div id="controls">
-    <label>Chọn ca:
-      <select id="shift">
-        <option value="">— Tất cả ca —</option>
-        <option>CA01</option>
-        <option>CA02</option>
-        <option>CA03</option>
-      </select>
-    </label>
-    <button id="refresh">Refresh</button>
-  </div>
-  <div id="map"></div>
+<div id="bar">
+  <label>Chọn ca:</label>
+  <select id="shift"></select>
+  <button id="btn">Refresh</button>
+  <span id="msg" class="err"></span>
+</div>
 
-  <!-- Leaflet & PapaParse -->
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
-  <script>
-    // 1) URL CSV Google Sheet đã Publish → ‘output=csv’
-    const CSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+<div id="map"></div>
 
-    // 2) Khởi tạo map Leaflet
-    const map = L.map('map').setView([10.0, 106.6], 8);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap'
-    }).addTo(map);
-    const markers = L.layerGroup().addTo(map);
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
+<script>
+/*----------------------------------------------------
+  1) LINK SHEET CSV – chỉ thay phần ***** bên dưới
+  --------------------------------------------------*/
+const ORIGIN_CSV =
+ 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-    // 3) Hàm load + parse CSV
-    async function loadData() {
-      markers.clearLayers();
-      const sel = document.getElementById('shift').value;
-      try {
-        const res = await fetch(CSV_URL);
-        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
-        const text = await res.text();
-        // parse text CSV
-        const { data, errors } = Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-        });
-        if (errors.length) console.warn('Parse errors:', errors);
-        console.log('Loaded rows:', data.length);
-        data.forEach(r => {
-          // Google CSV có thể dùng dấu ',' trong số thập phân
-          const lat = parseFloat(r.Lat.replace(',', '.'));
-          const lon = parseFloat(r.Lon.replace(',', '.'));
-          const shift = r.ShiftCode;
-          const email = r.Email;
-          if (!lat || !lon) return;
-          if (sel && shift !== sel) return;
-          L.marker([lat, lon])
-           .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
-           .addTo(markers);
-        });
-        if (markers.getLayers().length) {
-          map.fitBounds(markers.getBounds().pad(0.2));
-        }
-      } catch (e) {
-        console.error('Fetch/Parse lỗi:', e);
-        alert('Không tải được dữ liệu: ' + e.message);
+/* proxy CORS */
+const CSV_URL = 'https://r.jina.ai/http://'+ ORIGIN_CSV.replace(/^https?:\/\//,'');
+
+/*--------------------------------------------------*/
+const map  = L.map('map').setView([10.5,106], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'© OpenStreetMap'}
+).addTo(map);
+
+const markers = L.layerGroup().addTo(map);
+const shiftSel = document.getElementById('shift');
+const msg      = document.getElementById('msg');
+
+/* tiện ích log + báo lỗi */
+const logErr = txt => { console.warn(txt); msg.textContent = txt; };
+
+async function fetchCSV(){
+  msg.textContent='Đang tải…';
+  const res = await fetch(CSV_URL,{mode:'cors'});
+  if(!res.ok) throw 'Fetch error: '+res.status;
+  return await res.text();
+}
+
+function buildShiftList(rows){
+  const set = new Set(rows.map(r=>r.ShiftCode).filter(Boolean));
+  shiftSel.innerHTML =
+    '<option value="">— Tất cả ca —</option>' +
+    [...set].sort().map(c=>`<option>${c}</option>`).join('');
+}
+
+function drawMarkers(rows){
+  markers.clearLayers();
+  const need = shiftSel.value;
+  rows.forEach(r=>{
+    const lat = parseFloat(r.Lat), lon = parseFloat(r.Lon);
+    if(!lat||!lon) return;
+    if(need && r.ShiftCode!==need) return;
+    L.marker([lat,lon])
+     .bindPopup(`<b>${r.Email||'n/a'}</b><br>Ca: ${r.ShiftCode||''}`)
+     .addTo(markers);
+  });
+  if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
+}
+
+async function loadData(){
+  try{
+    console.log('▶️ tải CSV', CSV_URL);
+    const csv = await fetchCSV();
+    Papa.parse(csv,{
+      header:true,
+      skipEmptyLines:true,
+      complete: res=>{
+        if(res.errors.length){ logErr('Parse CSV lỗi'); return;}
+        if(!res.data.length){ logErr('Sheet trống'); return;}
+        buildShiftList(res.data);
+        drawMarkers(res.data);
+        msg.textContent='';
       }
-    }
+    });
+  }catch(e){ logErr('Không tải được dữ liệu: '+e); }
+}
 
-    document.getElementById('refresh').onclick = loadData;
-    window.addEventListener('load', loadData);
-  </script>
+document.getElementById('btn').onclick = loadData;
+/* load ngay lần đầu */
+loadData();
+</script>
 </body>
 </html>
