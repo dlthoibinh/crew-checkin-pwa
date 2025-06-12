@@ -4,7 +4,11 @@
 <meta charset="utf-8">
 <title>Crew Check-in – Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+<!-- Leaflet -->
+<link rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
 <style>
   html,body{margin:0;height:100%}
   #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;
@@ -12,7 +16,7 @@
        font:15px system-ui,Arial}
   #map{height:calc(100% - 46px)}
   select,button{padding:.3rem .6rem;font-size:15px}
-  #msg{font-style:italic;color:#555;margin-left:auto}
+  #msg{margin-left:auto;font-style:italic;color:#555}
 </style>
 </head>
 <body>
@@ -32,19 +36,13 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/*══════════════  CẤU HÌNH  ══════════════*/
-// URL CSV xuất bản lên web của anh (ví dụ trên ảnh chụp)
-const CSV_URL =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+/*═════════════ CẤU HÌNH ═════════════*/
+const API_URL  = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+const AUTO_MS  = 60_000;          // làm mới mỗi 60 s
 
-// Proxy xoá CORS, không cần cài đặt gì
-const CORS = 'https://corsproxy.io/?';
-
-// Tự refresh mỗi 60 giây
-const AUTO_MS = 60_000;
-
-/*══════════════  KHỞI TẠO  ══════════════*/
+/*═════════════ KHỞI TẠO MAP ═════════════*/
 window.addEventListener('load', () => {
+
   /* 1. Bản đồ */
   const map = L.map('map').setView([9.5, 106.4], 7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -55,54 +53,51 @@ window.addEventListener('load', () => {
   const $   = id => document.getElementById(id);
   const msg = t  => $('msg').textContent = t;
 
-  /* 3. Hàm tải CSV */
-  async function load() {
+  /* 3. Hàm tải & hiển thị */
+  async function load(){
     msg('Đang tải dữ liệu…'); markers.clearLayers();
 
-    try {
-      // Thêm timestamp để né cache
-      const url = CORS + encodeURIComponent(CSV_URL + '&t=' + Date.now());
-      const text = await fetch(url).then(r => {
-        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
-        return r.text();
+    try{
+      const url  = API_URL + '?list=1&t=' + Date.now(); // bust cache
+      const json = await fetch(url).then(r=>{
+        if(!r.ok) throw new Error(r.status+' '+r.statusText);
+        return r.json();
       });
 
-      // Parse CSV thủ công (sheet chỉ 5 cột)
-      const rows = text.trim().split(/\r?\n/).slice(1)  // bỏ header
-                     .map(l => l.split(','));
+      const rows = Array.isArray(json.rows) ? json.rows : [];   // [{…}]
       const sel  = $('shift').value || null;
       const pts  = [];
 
-      rows.forEach(r => {
-        const [ , email, shift, lat, lon ] = r;  // Timestamp ở cột 0
-        if (sel && shift !== sel) return;
-        const la = parseFloat(lat), lo = parseFloat(lon);
-        if (!la || !lo) return;
+      rows.forEach(r=>{
+        if(sel && r.shift !== sel) return;          // lọc ca nếu chọn
+        const la = parseFloat(r.lat), lo = parseFloat(r.lon);
+        if(!Number.isFinite(la)||!Number.isFinite(lo)) return;
+
         L.marker([la, lo])
-          .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+          .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
           .addTo(markers);
         pts.push([la, lo]);
       });
 
-      if (pts.length) {
-        map.fitBounds(pts, {padding:[30,30]});
+      if(pts.length){
+        map.fitBounds(pts,{padding:[30,30]});
         msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
-      } else {
+      }else{
         msg('Không có dữ liệu phù hợp');
       }
 
-    } catch (e) {
+    }catch(e){
       console.error(e);
-      alert('Không tải được dữ liệu: ' + e.message);
+      alert('Không tải được dữ liệu: '+e.message);
       msg('Lỗi tải dữ liệu');
     }
   }
 
-  /* 4. Sự kiện & auto-refresh */
+  /* 4. Sự kiện & tự reload */
   $('reload').onclick = load;
   $('shift').onchange = load;
-  load();                      // lần đầu
-  setInterval(load, AUTO_MS);  // tự làm mới
+  load();                        // lần đầu
+  setInterval(load, AUTO_MS);    // tự làm mới
 });
 </script>
 </body>
