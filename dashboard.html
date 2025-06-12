@@ -4,28 +4,19 @@
   <meta charset="utf-8">
   <title>Dashboard – Crew Check-In</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
-
-  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
   <style>
     body, html { margin:0; padding:0; height:100%; }
-    #controls {
-      height:50px; padding:8px;
-      background:#f8f8f8; display:flex; align-items:center;
-      gap:12px; font-family:sans-serif;
-      box-shadow:0 1px 2px rgba(0,0,0,0.1);
-    }
-    select, button {
-      padding:6px 12px; font-size:14px;
-      border:1px solid #ccc; border-radius:4px;
-      background:#fff; cursor:pointer;
-    }
+    #controls { height:50px; padding:8px; display:flex;align-items:center;
+                gap:12px;background:#f8f8f8;font-family:sans-serif;
+                box-shadow:0 1px 2px rgba(0,0,0,0.1); }
+    select, button { padding:6px 12px; font-size:14px;
+                     border:1px solid #ccc;border-radius:4px;
+                     background:#fff;cursor:pointer; }
     #map { width:100%; height:calc(100% - 50px); }
   </style>
 </head>
 <body>
-
   <div id="controls">
     <label for="shift">Chọn ca:</label>
     <select id="shift">
@@ -36,86 +27,78 @@
     </select>
     <button id="refresh">Refresh</button>
   </div>
-
   <div id="map"></div>
 
-  <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-
   <script>
-    // 1) Thay YOUR_GID bằng đúng gid của sheet LOG (nhìn URL khi đang mở tab LOG)
-    const SHEET_GID = '0'; // ví dụ: '0' hoặc '123456789'
+    // 1) GID tab LOG và key của sheet
+    const SHEET_GID = '963908913';
     const SHEET_KEY = '2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5';
+    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq?gid=${SHEET_GID}`;
 
-    // 2) URL Google Visualization API (JSONP)
-    const GVIZ_URL = 
-      `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq?gid=${SHEET_GID}`;
-
-    // 3) Khởi tạo map Leaflet
+    // 2) Khởi tạo map
     const map = L.map('map').setView([10.0,106.6],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
       attribution:'&copy; OpenStreetMap contributors'
     }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // 4) Hàm gọi JSONP
+    // 3) Hàm load JSONP và vẽ marker
     function loadData() {
+      console.clear();
+      console.log('▶ loadData() => JSONP từ:', GVIZ_URL);
       markers.clearLayers();
       const sel = document.getElementById('shift').value;
 
-      // Định nghĩa callback toàn cục
-      window.mySheetCallback = function(response) {
-        const table = response.table;
-        const cols = table.cols.map(c=>c.label);
-        let latest = {};
+      // Đăng ký callback
+      window.mySheetCallback = function(res) {
+        console.log('◀ mySheetCallback nhận:', res);
+        const cols = res.table.cols.map(c=>c.label);
+        const latest = {};
 
-        table.rows.forEach(r => {
-          // biến form: { Timestamp, Email, ShiftCode, Lat, Lon }
+        res.table.rows.forEach(r => {
           const row = {};
-          cols.forEach((label,i)=> row[label] = r.c[i]?.v);
+          cols.forEach((label,i)=>
+            row[label] = r.c[i]?.v
+          );
           if (!row.Email || !row.ShiftCode) return;
           if (sel && row.ShiftCode !== sel) return;
-
-          // parse Lat/Lon (chuyển dấu phẩy)
-          const lat = parseFloat( String(row.Lat).replace(',', '.') );
-          const lon = parseFloat( String(row.Lon).replace(',', '.') );
+          const lat = parseFloat(String(row.Lat).replace(',', '.'));
+          const lon = parseFloat(String(row.Lon).replace(',', '.'));
           if (isNaN(lat)||isNaN(lon)) return;
-
-          // ghi đè: dòng cuối cùng là mới nhất
           latest[row.Email] = {
             email: row.Email,
             shift: row.ShiftCode,
-            when : row.Timestamp,
+            when:  row.Timestamp,
             lat, lon
           };
         });
 
-        // vẽ markers
         Object.values(latest).forEach(p => {
           L.marker([p.lat,p.lon])
-            .bindPopup(
-              `<b>${p.email}</b><br>Ca: ${p.shift}<br>`+
-              `Lúc: ${p.when}`
-            )
-            .addTo(markers);
+           .bindPopup(`<b>${p.email}</b><br>Ca: ${p.shift}<br>Lúc: ${p.when}`)
+           .addTo(markers);
         });
 
-        // zoom
         const all = markers.getLayers();
         if (all.length) {
-          map.fitBounds( L.featureGroup(all).getBounds().pad(0.2) );
+          map.fitBounds(L.featureGroup(all).getBounds().pad(0.2));
+          console.log(`★ Đã vẽ ${all.length} marker(s).`);
+        } else {
+          console.log('⚠️ Không có marker nào (có thể không có dữ liệu hoặc filter).');
         }
 
-        // cleanup
+        // dọn
         delete window.mySheetCallback;
       };
 
-      // Tạo thẻ <script> JSONP, responseHandler=mySheetCallback
+      // thêm script JSONP
       const s = document.createElement('script');
-      s.src = `${GVIZ_URL}&tqx=out:json&responseHandler=mySheetCallback`;
+      s.src = GVIZ_URL + '&tqx=out:json&responseHandler=mySheetCallback';
       document.body.appendChild(s);
-      // tự remove thẻ sau 30s
-      setTimeout(()=> document.body.removeChild(s), 30000);
+      console.log('→ Script JSONP append với src=', s.src);
+      // remove sau 30s
+      setTimeout(()=>document.body.removeChild(s),30000);
     }
 
     document.getElementById('refresh').onclick = loadData;
