@@ -17,10 +17,11 @@
        font:15px system-ui,Arial}
   #map{height:calc(100% - 46px)}
   select,button{padding:.3rem .6rem;font-size:15px}
-  #msg{font-style:italic;color:#555}
+  #msg{font-style:italic;color:#555;margin-left:auto}
 </style>
 </head>
 <body>
+
   <!-- thanh công cụ -->
   <div id="bar">
     <label>Chọn ca:&nbsp;</label>
@@ -38,57 +39,50 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-  /* Google Sheet đã “Xuất bản lên web” dưới dạng CSV */
-  const CSV_URL =
-    'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+  /* ──────────────── CẤU HÌNH ──────────────── */
+  const SHEET_ID  = '1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'; // thay bằng ID của anh
+  const TAB_NAME  = 'LOG';           // đúng tên sheet
+  const JSON_URL  = `https://opensheet.elk.sh/${SHEET_ID}/${TAB_NAME}`;
+  const AUTO_REFRESH_MS = 60_000;    // 60 giây
 
+  /* ──────────────── KHỞI TẠO ──────────────── */
   window.addEventListener('load', () => {
-    /* 1. Khởi tạo bản đồ */
-    const map   = L.map('map').setView([10.3,106.2], 7);
+    /* 1. Bản đồ */
+    const map = L.map('map').setView([10.3,106.2], 7);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                {attribution:'© OpenStreetMap'})
-      .addTo(map);
+                {attribution:'© OpenStreetMap'}).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    /* 2. Hàm tiện ích */
-    const $ = id => document.getElementById(id);
-    const msg = t => $('msg').textContent = t;
+    /* 2. Tiện ích DOM */
+    const $   = id => document.getElementById(id);
+    const msg = t  => $('msg').textContent = t;
 
-    /* 3. Tải & vẽ điểm */
+    /* 3. Hàm tải & hiển thị */
     async function load() {
       msg('Đang tải dữ liệu…');
       markers.clearLayers();
 
       try {
-        /* thêm tham số thời gian để tránh cache */
-        const resp = await fetch(CSV_URL + '&t=' + Date.now());
-        if (!resp.ok) throw new Error(resp.status + ' ' + resp.statusText);
-        const text = await resp.text();
-
-        /* parse CSV bằng split – Sheet chỉ 5 cột nên đủ an toàn */
-        const rows = text.trim().split(/\r?\n/).slice(1)   // bỏ header
-                       .map(l => l.split(','));
-        const sel = $('shift').value || null;
-        const pts = [];
+        const rows = await fetch(JSON_URL + '?t=' + Date.now()).then(r => r.json());
+        const sel  = $('shift').value || null;
+        const pts  = [];
 
         rows.forEach(r => {
-          const [ ,email,shift,lat,lon] = r;   // Timestamp ở cột đầu
-          if (sel && shift !== sel) return;
-          const la = +lat, lo = +lon;
+          if (sel && r.shift !== sel) return;
+          const la = +r.lat, lo = +r.lon;
           if (!la || !lo) return;
-          L.marker([la,lo])
-            .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+          L.marker([la, lo])
+            .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
             .addTo(markers);
-          pts.push([la,lo]);
+          pts.push([la, lo]);
         });
 
         if (pts.length) {
           map.fitBounds(pts, {padding:[30,30]});
-          msg(`Đã hiển thị ${pts.length} vị trí`);
+          msg(`Hiển thị ${pts.length} vị trí • Cập nhật: ${new Date().toLocaleTimeString()}`);
         } else {
           msg('Không có dữ liệu phù hợp');
         }
-
       } catch (err) {
         console.error(err);
         alert('Không tải được dữ liệu: ' + err.message);
@@ -96,12 +90,11 @@
       }
     }
 
-    /* 4. Sự kiện */
-    $('reload').onclick = load;
-    $('shift').onchange = load;
-
-    /* 5. Lần đầu tự tải */
-    load();
+    /* 4. Sự kiện & auto-refresh */
+    $('reload').onclick  = load;
+    $('shift').onchange  = load;
+    load();                             // lần đầu
+    setInterval(load, AUTO_REFRESH_MS); // tự làm mới
   });
   </script>
 </body>
