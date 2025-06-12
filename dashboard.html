@@ -4,11 +4,8 @@
 <meta charset="utf-8">
 <title>Crew Check-in – Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
-<!-- Leaflet -->
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
 <style>
   html,body{margin:0;height:100%}
   #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;
@@ -21,7 +18,6 @@
 </head>
 <body>
 
-<!-- Thanh công cụ -->
 <div id="bar">
   <label>Chọn ca:&nbsp;</label>
   <select id="shift">
@@ -31,73 +27,64 @@
   <button id="reload">Refresh</button>
   <span id="msg"></span>
 </div>
-
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/*═════════════ CẤU HÌNH ═════════════*/
-const API_URL  = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-const AUTO_MS  = 60_000;          // làm mới mỗi 60 s
+/*═══════════ CẤU HÌNH ═══════════*/
+const API_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+const AUTO_MS = 60_000;          // tự reload 60 s
 
-/*═════════════ KHỞI TẠO MAP ═════════════*/
+/*═══════════ KHỞI TẠO MAP ═══════════*/
 window.addEventListener('load', () => {
-
-  /* 1. Bản đồ */
-  const map = L.map('map').setView([9.5, 106.4], 7);
+  const map = L.map('map').setView([9.5,106.4], 7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               {attribution:'© OpenStreetMap'}).addTo(map);
   const markers = L.layerGroup().addTo(map);
 
-  /* 2. Tiện ích DOM */
   const $   = id => document.getElementById(id);
   const msg = t  => $('msg').textContent = t;
 
-  /* 3. Hàm tải & hiển thị */
-  async function load(){
-    msg('Đang tải dữ liệu…'); markers.clearLayers();
+  /* callback JSONP toàn cục */
+  window.updateCrew = data => {
+    if (data.status !== 'OK') return msg('API lỗi: '+ (data.message||'??'));
 
-    try{
-      const url  = API_URL + '?list=1&t=' + Date.now(); // bust cache
-      const json = await fetch(url).then(r=>{
-        if(!r.ok) throw new Error(r.status+' '+r.statusText);
-        return r.json();
-      });
+    markers.clearLayers();
+    const sel = $('shift').value || null;
+    const pts = [];
 
-      const rows = Array.isArray(json.rows) ? json.rows : [];   // [{…}]
-      const sel  = $('shift').value || null;
-      const pts  = [];
+    data.rows.forEach(r=>{
+      if(sel && r.shift!==sel) return;
+      const la = +r.lat, lo = +r.lon;
+      if(!la || !lo) return;
+      L.marker([la,lo])
+        .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
+        .addTo(markers);
+      pts.push([la,lo]);
+    });
 
-      rows.forEach(r=>{
-        if(sel && r.shift !== sel) return;          // lọc ca nếu chọn
-        const la = parseFloat(r.lat), lo = parseFloat(r.lon);
-        if(!Number.isFinite(la)||!Number.isFinite(lo)) return;
+    if(pts.length){
+      map.fitBounds(pts,{padding:[30,30]});
+      msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
+    }else msg('Không có dữ liệu phù hợp');
+  };
 
-        L.marker([la, lo])
-          .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
-          .addTo(markers);
-        pts.push([la, lo]);
-      });
+  function load(){
+    msg('Đang tải dữ liệu…');
+    /* xoá script cũ (nếu có) */
+    document.querySelectorAll('script[data-crew]').forEach(s=>s.remove());
 
-      if(pts.length){
-        map.fitBounds(pts,{padding:[30,30]});
-        msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
-      }else{
-        msg('Không có dữ liệu phù hợp');
-      }
-
-    }catch(e){
-      console.error(e);
-      alert('Không tải được dữ liệu: '+e.message);
-      msg('Lỗi tải dữ liệu');
-    }
+    const s = document.createElement('script');
+    s.src = API_URL + '?list=1'
+            + '&shift=' + encodeURIComponent($('shift').value||'')
+            + '&callback=updateCrew&t=' + Date.now();
+    s.dataset.crew = 1;
+    document.body.appendChild(s);
   }
 
-  /* 4. Sự kiện & tự reload */
   $('reload').onclick = load;
   $('shift').onchange = load;
-  load();                        // lần đầu
-  setInterval(load, AUTO_MS);    // tự làm mới
+  load(); setInterval(load,AUTO_MS);
 });
 </script>
 </body>
