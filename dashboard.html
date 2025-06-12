@@ -1,88 +1,95 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8">
-<title>Bản đồ Ca trực</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta charset="utf-8">
+  <title>Crew Check-in – Dashboard</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<style>
-  body,html{margin:0;height:100%}
-  #map{height:calc(100% - 42px)}
-  #bar{display:flex;gap:6px;padding:4px;background:#f7f7f7;
-       box-shadow:0 1px 3px rgba(0,0,0,.15);align-items:center}
-  select,button{padding:5px 9px;font-size:14px}
-  #msg{font-size:14px;color:#b00}
-</style>
+  <!-- Leaflet -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha512-sA+e2sTL4nFzB7qTjT3kU+/9V+7sHEyM5eEI6e7EU8ev/9B0MEvjB+Efh5E7MdbYQZhx5p1YvhfAw4BZi6FOg=="
+        crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+          integrity="sha512-mQtfMYr4SWhM6NZEzzX+FJ6rJndXb0WzFzIu/O6Rg8xBr4Z7hX4O5dAYrxwJf9xZQ7JwUrCJv6yUXZoB5hXOg=="
+          crossorigin=""></script>
+
+  <style>
+    body,html{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto}
+    #topbar{display:flex;align-items:center;gap:.5rem;padding:.4rem .6rem;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.08);position:relative;z-index:9}
+    select,button{padding:.3rem .6rem;font-size:15px}
+    #msg{font-size:14px;color:#666}
+    #map{height:calc(100% - 46px)}
+    .leaflet-popup-content{font-size:14px;line-height:1.3}
+  </style>
 </head>
 <body>
+  <div id="topbar">
+    <label>Chọn ca:</label>
+    <select id="shift">
+      <option value="">— Tất cả ca —</option>
+      <option>CA01</option><option>CA02</option><option>CA03</option>
+    </select>
+    <button id="reload">Refresh</button>
+    <span id="msg"></span>
+  </div>
+  <div id="map"></div>
 
-<div id="bar">
-  Chọn ca:
-  <select id="shift"></select>
-  <button id="btn">Refresh</button>
-  <span id="msg"></span>
-</div>
-<div id="map"></div>
+  <script>
+  /*──────────────────────── CONFIG */
+  const JSON_URL =
+  'https://docs.google.com/spreadsheets/d/1MIILXBmdKfC5KB9QZrwk4sb_CmI5-n1GfM3VUdlpWY'
+  + '/gviz/tq?tqx=out:json&gid=963908913';
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.2/papaparse.min.js"></script>
-<script>
-const CSV_URL =
- 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+  /*──────────────────────── Map */
+  const map = L.map('map').setView([10.3,106.2],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap'
+  }).addTo(map);
+  const layer = L.layerGroup().addTo(map);
 
-const map = L.map('map').setView([10.4, 105.4], 8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'©OpenStreetMap'}).addTo(map);
-const layer = L.layerGroup().addTo(map);
+  const shiftSel = document.getElementById('shift');
+  document.getElementById('reload').onclick = load;
+  window.addEventListener('load',load);
 
-const $shift = document.getElementById('shift');
-const $msg   = document.getElementById('msg');
+  function msg(t){document.getElementById('msg').textContent=t;}
 
-$shift.innerHTML = '<option value="">— Tất cả ca —</option>'+
-                   ['CA01','CA02','CA03'].map(c=>`<option>${c}</option>`).join('');
+  async function load(){
+    msg('Đang tải dữ liệu…');
+    layer.clearLayers();
+    try{
+      const raw = await fetch(JSON_URL,{cache:'no-store'}).then(r=>r.text());
+      const json = JSON.parse(raw.slice(raw.indexOf('{'),raw.lastIndexOf('}')+1));
+      const rows = json.table.rows;
 
-/* tải + vẽ */
-async function load(){
-  $msg.textContent='Đang tải dữ liệu';
-  layer.clearLayers();
-  try{
-    const res = await fetch(CSV_URL,{cache:'no-store'});
-    if(!res.ok) throw new Error(res.status);
-    const csv = await res.text();
-    const data = Papa.parse(csv,{header:true}).data;
+      const sel = shiftSel.value||null;
+      const pts=[];
+      rows.forEach(r=>{
+        const c=r.c;
+        if(!c[1]) return;
+        const email=c[1].v,
+              shift=c[2]?.v||'',
+              lat =parseFloat(c[3]?.v),
+              lon =parseFloat(c[4]?.v);
+        if(isNaN(lat)||isNaN(lon)) return;
+        if(sel && shift!==sel) return;
 
-    const sel = $shift.value||null;
-    let bounds = [];
-    data.forEach(r=>{
-      if(!r.Email) return;                 // dòng trống
-      if(sel && r.ShiftCode!==sel) return; // lọc ca
+        L.marker([lat,lon])
+          .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+          .addTo(layer);
+        pts.push([lat,lon]);
+      });
 
-      let lat = parseFloat(r.Lat.toString().replace(',','.'));
-      let lon = parseFloat(r.Lon.toString().replace(',','.'));
-      if(isNaN(lat)||isNaN(lon)) return;
-
-      L.marker([lat,lon])
-       .bindPopup(`<b>${r.Email}</b><br>Ca: ${r.ShiftCode}`)
-       .addTo(layer);
-      bounds.push([lat,lon]);
-    });
-
-    if(bounds.length){
-      map.fitBounds(bounds,{padding:[30,30]});
-      $msg.textContent=`Hiển thị ${bounds.length} vị trí`;
-    }else{
-      $msg.textContent='Không có dữ liệu';
+      if(pts.length){
+        map.fitBounds(pts,{padding:[30,30]});
+        msg(`Hiển thị ${pts.length} vị trí`);
+      }else msg('Không có dữ liệu');
+    }catch(e){
+      console.error(e);
+      msg('Lỗi tải dữ liệu');
+      alert('Không tải được dữ liệu: '+e);
     }
-  }catch(e){
-    console.error(e);
-    $msg.textContent='Lỗi tải dữ liệu';
-    alert('Không tải được dữ liệu: '+e);
   }
-}
-
-document.getElementById('btn').onclick = load;
-window.addEventListener('load',load);
-</script>
+  </script>
 </body>
 </html>
