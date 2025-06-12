@@ -4,112 +4,85 @@
 <meta charset="utf-8">
 <title>Dashboard – Crew Check-In</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 <style>
-  body,html{margin:0;padding:0;height:100%;font-family:sans-serif}
-  #toolbar{padding:6px 10px;background:#f7f7f7;display:flex;gap:8px;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-  #map{height:calc(100% - 44px)}
-  select,button{padding:4px 10px;font-size:14px}
+ body,html{margin:0;height:100%}
+ #bar{display:flex;gap:8px;align-items:center;padding:6px 10px;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+ select,button{padding:4px 8px;font-size:14px}
+ #map{height:calc(100% - 46px)}
 </style>
 </head>
 <body>
 
-<div id="toolbar">
-  <label>Chọn ca:&nbsp;
+<div id="bar">
+  <label>Chọn ca:
     <select id="shift"></select>
   </label>
-  <button id="btnRefresh">Refresh</button>
-  <span id="note" style="color:#888;font-size:13px"></span>
+  <button id="btn">Refresh</button>
+  <small id="msg" style="color:#666"></small>
 </div>
 
 <div id="map"></div>
 
-<!-- libs -->
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
-
 <script>
-/* ============ CONFIG ============ */
-// URL CSV (đã Publish to web  →  .csv)
-const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+/* =================== CONFIG =================== */
+// link CSV gốc
+const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+// proxy CORS miễn phí (corsproxy.io prepend URL)
+const CSV_URL   = 'https://corsproxy.io/' + encodeURIComponent(SHEET_CSV);
+// auto-refresh (giây) – 0 để tắt
+const AUTO = 60;
+/* ============================================= */
 
-// Tự refresh mỗi … giây (0 = tắt)
-const AUTO_REFRESH_SEC = 60;
-/* ================================= */
-
-const shiftSel = document.getElementById('shift');
-const btnRefresh = document.getElementById('btnRefresh');
-const note = document.getElementById('note');
-let timer = null;
-
-// Khởi tạo map
-const map = L.map('map').setView([10.3, 105.6], 8);
+const map = L.map('map').setView([10.3,105.6],8);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'&copy; OpenStreetMap'
 }).addTo(map);
-const layer = L.layerGroup().addTo(map);
+const markers = L.layerGroup().addTo(map);
 
-btnRefresh.onclick = loadData;
-if (AUTO_REFRESH_SEC>0) setInterval(loadData, AUTO_REFRESH_SEC*1000);
+const sel = document.getElementById('shift');
+const msg = document.getElementById('msg');
+document.getElementById('btn').onclick = load;
 
-// loadData lần đầu khi DOM ready
-window.addEventListener('load', () => {
-  loadData();
-});
+if (AUTO>0) setInterval(load,AUTO*1000);
+window.addEventListener('load',load);
 
-//--------------------------
-function loadData(){
-  note.textContent='Đang tải…';
-  layer.clearLayers();
+function load(){
+  msg.textContent='Đang tải…';
+  markers.clearLayers();
   fetch(CSV_URL)
     .then(r=>r.text())
-    .then(csvText=>{
-      // Xác định delimiter
-      const delim = (csvText.indexOf(';')!==-1 && csvText.indexOf(';') < csvText.indexOf(',')) ? ';' : ',';
-      Papa.parse(csvText,{
-        header:true,
-        skipEmptyLines:true,
-        delimiter:delim,
+    .then(txt=>{
+      const delim = txt.includes(';')&&txt.indexOf(';')<txt.indexOf(',') ? ';' : ',';
+      Papa.parse(txt,{header:true,delimiter:delim,skipEmptyLines:true,
         complete:res=>render(res.data),
-        error:err=>showError(err.message||err)
+        error:e=>alert('Không tải được dữ liệu: '+e)
       });
     })
-    .catch(err=>showError('Failed to fetch'));
+    .catch(()=>alert('Không tải được dữ liệu: Failed to fetch'));
 }
 
 function render(rows){
-  if(!rows.length){showError('Sheet rỗng');return;}
-  // ---- lấy danh sách ShiftCode duy nhất
-  const shifts = [...new Set(rows.map(r=>r.ShiftCode).filter(Boolean))].sort();
-  if(!shiftSel.options.length){          // fill lần đầu
-    shiftSel.innerHTML='<option value="">— Tất cả ca —</option>'+
-      shifts.map(s=>`<option>${s}</option>`).join('');
+  const shifts=[...new Set(rows.map(r=>r.ShiftCode).filter(Boolean))].sort();
+  if(!sel.options.length){
+     sel.innerHTML='<option value="">— Tất cả ca —</option>'+
+                   shifts.map(s=>`<option>${s}</option>`).join('');
   }
-
-  const curShift = shiftSel.value;
-  let count=0;
+  const cur=sel.value;
+  let cnt=0;
   rows.forEach(r=>{
-    if(curShift && r.ShiftCode!==curShift) return;
-    const lat = parseFloat(r.Lat);
-    const lon = parseFloat(r.Lon);
+    if(cur && r.ShiftCode!==cur) return;
+    const lat=parseFloat(r.Lat),lon=parseFloat(r.Lon);
     if(!lat||!lon) return;
     L.marker([lat,lon])
-      .bindPopup(`<b>${r.Email||'N/A'}</b><br>Ca: ${r.ShiftCode||''}<br>${r.Timestamp||''}`)
-      .addTo(layer);
-    count++;
+     .bindPopup(`<b>${r.Email||''}</b><br>Ca: ${r.ShiftCode||''}<br>${r.Timestamp||''}`)
+     .addTo(markers);
+    cnt++;
   });
-  if(count){
-    map.fitBounds(layer.getBounds().pad(0.2));
-    note.textContent=`Hiển thị ${count} vị trí • cập nhật ${new Date().toLocaleTimeString()}`;
-  }else{
-    note.textContent='Không có bản ghi phù hợp';
-  }
-}
-
-function showError(msg){
-  note.textContent='';
-  alert('Không tải được dữ liệu: '+msg);
+  if(cnt){ map.fitBounds(markers.getBounds().pad(.2)); }
+  msg.textContent = cnt?`Hiển thị ${cnt} điểm • ${new Date().toLocaleTimeString()}`:'Không có dữ liệu';
 }
 </script>
 </body>
