@@ -4,11 +4,7 @@
 <meta charset="utf-8">
 <title>Crew Check-in – Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-
-<!-- Leaflet -->
-<link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
   html,body{margin:0;height:100%}
   #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;
@@ -21,7 +17,7 @@
 </head>
 <body>
 
-<!-- thanh công cụ -->
+<!-- Thanh công cụ -->
 <div id="bar">
   <label>Chọn ca:&nbsp;</label>
   <select id="shift">
@@ -36,15 +32,21 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/*═══════════════  CẤU HÌNH  ═══════════════*/
-const SHEET_ID  = '1MIILXBmdKFzSB9QPZrwk4sb_Cm1S-n1GFM3VUduLpW'; // ID thật của file
-const TAB_NAME  = 'LOG';            // tên sheet
-const AUTO_MS   = 60_000;           // tự reload 60 giây/lần
+/*══════════════  CẤU HÌNH  ══════════════*/
+// URL CSV xuất bản lên web của anh (ví dụ trên ảnh chụp)
+const CSV_URL =
+  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-/*═══════════════  KHỞI TẠO  ═══════════════*/
+// Proxy xoá CORS, không cần cài đặt gì
+const CORS = 'https://corsproxy.io/?';
+
+// Tự refresh mỗi 60 giây
+const AUTO_MS = 60_000;
+
+/*══════════════  KHỞI TẠO  ══════════════*/
 window.addEventListener('load', () => {
   /* 1. Bản đồ */
-  const map = L.map('map').setView([9.5,106.4], 7);
+  const map = L.map('map').setView([9.5, 106.4], 7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
               {attribution:'© OpenStreetMap'}).addTo(map);
   const markers = L.layerGroup().addTo(map);
@@ -53,38 +55,33 @@ window.addEventListener('load', () => {
   const $   = id => document.getElementById(id);
   const msg = t  => $('msg').textContent = t;
 
-  /* 3. Lấy dữ liệu JSON qua OpenSheet (đã có CORS) */
-  const jsonURL = tab =>
-    `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(tab)}?t=` + Date.now();
-
-  async function fetchSheet() {
-    const r = await fetch(jsonURL(TAB_NAME));
-    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
-    const data = await r.json();
-    if (!Array.isArray(data))
-      throw new Error(data.error || 'Không phải mảng dữ liệu');
-    return data;
-  }
-
-  /* 4. Vẽ marker */
+  /* 3. Hàm tải CSV */
   async function load() {
-    msg('Đang tải dữ liệu…');
-    markers.clearLayers();
+    msg('Đang tải dữ liệu…'); markers.clearLayers();
 
     try {
-      const rows = await fetchSheet();
+      // Thêm timestamp để né cache
+      const url = CORS + encodeURIComponent(CSV_URL + '&t=' + Date.now());
+      const text = await fetch(url).then(r => {
+        if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+        return r.text();
+      });
+
+      // Parse CSV thủ công (sheet chỉ 5 cột)
+      const rows = text.trim().split(/\r?\n/).slice(1)  // bỏ header
+                     .map(l => l.split(','));
       const sel  = $('shift').value || null;
       const pts  = [];
 
       rows.forEach(r => {
-        if (sel && r.ShiftCode !== sel) return;     // lọc ca
-        const lat = parseFloat(r.Lat),
-              lon = parseFloat(r.Lon);
-        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
-        L.marker([lat, lon])
-          .bindPopup(`<b>${r.Email}</b><br>Ca: ${r.ShiftCode}`)
+        const [ , email, shift, lat, lon ] = r;  // Timestamp ở cột 0
+        if (sel && shift !== sel) return;
+        const la = parseFloat(lat), lo = parseFloat(lon);
+        if (!la || !lo) return;
+        L.marker([la, lo])
+          .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
           .addTo(markers);
-        pts.push([lat, lon]);
+        pts.push([la, lo]);
       });
 
       if (pts.length) {
@@ -101,11 +98,11 @@ window.addEventListener('load', () => {
     }
   }
 
-  /* 5. Sự kiện & auto-refresh */
+  /* 4. Sự kiện & auto-refresh */
   $('reload').onclick = load;
   $('shift').onchange = load;
-  load();                      // tải ngay
-  setInterval(load, AUTO_MS);  // làm mới định kỳ
+  load();                      // lần đầu
+  setInterval(load, AUTO_MS);  // tự làm mới
 });
 </script>
 </body>
