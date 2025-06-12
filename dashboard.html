@@ -3,13 +3,20 @@
 <head>
   <meta charset="utf-8">
   <title>Dashboard – Crew Check-In</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
   <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
     body, html { margin:0; padding:0; height:100%; }
-    #controls { padding:8px; background:#f8f8f8; display:flex; gap:8px; }
+    #controls {
+      padding:8px;
+      background:#f0f0f0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
     #map { width:100%; height:calc(100% - 48px); }
+    select, button { padding:6px 10px; font-size:14px; }
   </style>
 </head>
 <body>
@@ -27,69 +34,53 @@
   </div>
   <div id="map"></div>
 
-  <!-- Leaflet & jQuery (JSONP helper) -->
+  <!-- Leaflet & PapaParse -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
 
   <script>
-    // 1) Thay YOUR_SHEET_KEY và SHEET_GID cho đúng (đã publish)
-    const SHEET_KEY = '2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5';
-    const SHEET_GID = '963908913';
-
-    // Hàm build URL JSONP
-    function buildJsonpUrl() {
-      const base = `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq`;
-      const params = $.param({
-        gid:    SHEET_GID,
-        tqx:    'out:json',
-        tq:     '',               // có thể thêm query SQL nếu muốn
-        responseHandler: 'onData' // tên callback
-      });
-      return `${base}?${params}`;
-    }
+    // 1) Dán URL CSV bạn đã Publish:
+    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
     // 2) Khởi tạo map
-    const map = L.map('map').setView([10.0, 106.6], 8);
+    const map = L.map('map').setView([10.0,106.6],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // 3) Callback JSONP
-    function onData(json) {
-      console.clear();
-      markers.clearLayers();
-      const rows = json.table.rows;
-      console.log('▶ onData:', rows.length, 'rows');
-      const sel = document.getElementById('shift').value;
-      rows.forEach(r => {
-        const c = r.c;
-        const email = c[1]?.v;
-        const shift = c[2]?.v;
-        const lat   = parseFloat(c[3]?.v);
-        const lon   = parseFloat(c[4]?.v);
-        if (!lat || !lon) return;
-        if (sel && shift !== sel) return;
-        L.marker([lat, lon])
-         .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
-         .addTo(markers);
-      });
-      if (markers.getLayers().length) {
-        map.fitBounds(markers.getBounds().pad(0.2));
-      }
-    }
-
-    // 4) Nạp JSONP
+    // 3) Load & hiển thị
     function loadData() {
-      console.log('▶ loadData() → JSONP từ:', buildJsonpUrl());
-      const script = document.createElement('script');
-      script.src = buildJsonpUrl();
-      document.body.appendChild(script);
-      // xoá tag cũ để mỗi lần load lại nó fresh
-      setTimeout(()=>document.body.removeChild(script), 30_000);
+      markers.clearLayers();
+      const sel = document.getElementById('shift').value;
+      Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: results => {
+          console.clear();
+          console.log('Loaded rows:', results.data.length);
+          results.data.forEach(r => {
+            const lat = parseFloat(r.Lat.replace(',','.'));
+            const lon = parseFloat(r.Lon.replace(',','.'));
+            const shift = r.ShiftCode;
+            const email = r.Email;
+            if (!lat||!lon) return;
+            if (sel && shift !== sel) return;
+            L.marker([lat,lon])
+             .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+             .addTo(markers);
+          });
+          // Zoom to markers
+          if (markers.getLayers().length) {
+            map.fitBounds(markers.getBounds().pad(0.2));
+          }
+        },
+        error: err => console.error('PapaParse error:', err)
+      });
     }
 
-    document.getElementById('refresh').addEventListener('click', loadData);
+    document.getElementById('refresh').onclick = loadData;
     window.addEventListener('load', loadData);
   </script>
 
