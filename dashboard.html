@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <title>Dashboard – Crew Check-In</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Leaflet CSS -->
   <link
@@ -13,15 +13,18 @@
 
   <style>
     body, html { margin:0; padding:0; height:100%; }
-    #map { width:100%; height:calc(100% - 50px); }
     #controls {
-      height:50px; padding:5px;
+      height:50px; padding:8px;
       background:#f8f8f8; display:flex; align-items:center;
-      gap:8px; box-shadow:0 1px 2px rgba(0,0,0,0.1);
+      gap:12px; box-shadow:0 1px 2px rgba(0,0,0,0.1);
+      font-family:sans-serif;
     }
     select, button {
-      padding:6px 10px; font-size:14px;
+      padding:6px 12px; font-size:14px;
+      border:1px solid #ccc; border-radius:4px;
+      background:#fff; cursor:pointer;
     }
+    #map { width:100%; height:calc(100% - 50px); }
   </style>
 </head>
 <body>
@@ -45,70 +48,77 @@
   <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
 
   <script>
-    // 1) Thay YOUR_SHEET_CSV_URL bằng URL CSV của Google Sheet đã publish:
-    const SHEET_CSV_URL = 
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=0&single=true&output=csv';
+    // URL CSV public từ Google Sheets (Publish → CSV)
+    const SHEET_CSV_URL =
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'
+      + '/pub?gid=0&single=true&output=csv';
 
-    // 2) Khởi tạo bản đồ Leaflet
-    const map = L.map('map').setView([10.0, 106.6], 8);
+    // Khởi tạo map
+    const map = L.map('map').setView([10.0,106.6],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Layer group để giữ markers
+    // Layer group chứa marker
     const markers = L.layerGroup().addTo(map);
 
-    // Hàm load & hiển thị dữ liệu
+    // Load & render dữ liệu
     function loadData() {
       markers.clearLayers();
-      const selectedShift = document.getElementById('shift').value;
-      
+      const sel = document.getElementById('shift').value;
+
       Papa.parse(SHEET_CSV_URL, {
         download: true,
         header: true,
         complete: function(results) {
-          // 1) build map: email → latest record
+          // Tập hợp bản ghi mới nhất cho mỗi Email
           const latest = {};
           results.data.forEach(row => {
-            const ts    = new Date(row.Timestamp).getTime();
+            // Lấy chuỗi lat/lon, thay ',' thành '.'
+            let latS = (row.Lat || row.latitude || '').replace(',', '.').trim();
+            let lonS = (row.Lon || row.longitude || '').replace(',', '.').trim();
+            const ts = Date.parse(row.Timestamp);
             const email = row.Email;
             const shift = row.ShiftCode;
-            if (!row.Lat || !row.Lon) return;
-            if (selectedShift && shift !== selectedShift) return;
-            // nếu chưa có record này hoặc timestamp lớn hơn, cập nhật
+
+            if (!latS || !lonS || isNaN(ts)) return;
+            if (sel && shift !== sel) return;
+
+            const lat = parseFloat(latS);
+            const lon = parseFloat(lonS);
+            if (isNaN(lat) || isNaN(lon)) return;
+
+            // Cập nhật nếu mới hơn
             if (!latest[email] || ts > latest[email].ts) {
-              latest[email] = {
-                ts, lat: parseFloat(row.Lat),
-                lon: parseFloat(row.Lon),
-                email, shift, when: row.Timestamp
-              };
+              latest[email] = { ts, lat, lon, email, shift, when: row.Timestamp };
             }
           });
-    
-          // 2) vẽ marker cho từng latest[email]
+
+          // Vẽ marker cho mỗi nhân viên
           Object.values(latest).forEach(p => {
             L.marker([p.lat, p.lon])
              .bindPopup(
-               `<b>${p.email}</b><br>Ca: ${p.shift}<br>`
-              + `Lúc: ${p.when}`
+               `<b>${p.email}</b><br>Ca: ${p.shift}<br>` +
+               `Lúc: ${p.when}`
              )
              .addTo(markers);
           });
-    
-          // 3) zoom để bao đủ
-          if (markers.getLayers().length) {
-            map.fitBounds(markers.getBounds().pad(0.2));
+
+          // Zoom map
+          const all = markers.getLayers();
+          if (all.length) {
+            const group = L.featureGroup(all);
+            map.fitBounds(group.getBounds().pad(0.2));
           }
         }
       });
     }
 
-
-    // Gắn sự kiện cho button Refresh
+    // Sự kiện nút Refresh
     document.getElementById('refresh')
       .addEventListener('click', loadData);
 
-    // Khi trang load xong, tự động load
+    // Tải dữ liệu ngay khi mở trang
     window.addEventListener('load', loadData);
   </script>
 </body>
