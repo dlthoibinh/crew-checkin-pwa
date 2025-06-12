@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <title>Giám sát Ca trực</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+  <!-- Leaflet Fullscreen plugin CSS -->
+  <link rel="stylesheet" href="https://api.maptiler.com/plugins/leaflet-fullscreen/v1.6.0/leaflet.fullscreen.css"/>
+  <style>
+    /* Toàn trang */
+    html, body { margin:0; padding:0; height:100%; }
+    #map { position:absolute; top:0; bottom:60px; width:100%; }
+    /* Panel điều khiển trên cùng */
+    #control-bar {
+      position:absolute; top:10px; left:50%; transform:translateX(-50%);
+      background:rgba(255,255,255,0.9); padding:8px; border-radius:4px;
+      display:flex; gap:8px; flex-wrap:wrap; z-index:1000;
+    }
+    #control-bar select, #control-bar button {
+      padding:4px 8px; font-size:14px;
+    }
+    /* Chuyển marker POI (ví dụ điểm quan tâm) */
+    .poi-layer { display:none; }
+    /* Bottom navigation */
+    #bottom-nav {
+      position:absolute; bottom:0; left:0; right:0; height:60px;
+      background:#fff; border-top:1px solid #ccc; display:flex;
+    }
+    #bottom-nav .nav-item {
+      flex:1; text-align:center; font-size:12px; color:#555;
+      display:flex; flex-direction:column; align-items:center;
+      justify-content:center;
+    }
+    #bottom-nav .nav-item.active { color:#0088ff; }
+    #bottom-nav .nav-item i {
+      font-size:20px; margin-bottom:4px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Bản đồ -->
+  <div id="map"></div>
+
+  <!-- Thanh điều khiển trên cùng -->
+  <div id="control-bar">
+    <select id="shift">
+      <option value="">-- Tất cả ca --</option>
+      <option>CA01</option>
+      <option>CA02</option>
+      <option>CA03</option>
+    </select>
+    <button id="btn-refresh">Refresh</button>
+    <button id="btn-poi">POI</button>
+  </div>
+
+  <!-- Navigation dưới cùng -->
+  <div id="bottom-nav">
+    <div class="nav-item active" data-tab="monitor"><i>🗺️</i><span>Giám sát</span></div>
+    <div class="nav-item" data-tab="devices"><i>📟</i><span>Thiết bị</span></div>
+    <div class="nav-item" data-tab="alerts"><i>⚠️</i><span>Cảnh báo</span></div>
+    <div class="nav-item" data-tab="account"><i>👤</i><span>Tài khoản</span></div>
+  </div>
+
+  <!-- Leaflet JS & Plugins -->
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://api.maptiler.com/plugins/leaflet-fullscreen/v1.6.0/Leaflet.fullscreen.min.js"></script>
+
+  <script>
+    // URL Google Sheet CSV
+    const SHEET_CSV = 'https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/gviz/tq?tqx=out:csv&sheet=LOG';
+
+    // Khởi bản đồ
+    const map = L.map('map', {
+      center: [10.0,105.8],
+      zoom: 10,
+      scrollWheelZoom: true,
+      fullscreenControl: true
+    });
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© OpenStreetMap'
+    }).addTo(map);
+
+    // Layer để chứa marker nhân viên
+    const crewLayer = L.layerGroup().addTo(map);
+    // Layer để chứa POI (ví dụ cột mốc)
+    const poiLayer = L.layerGroup().addTo(map);
+
+    // Load data và render marker
+    function loadCrew() {
+      fetch(SHEET_CSV).then(r=>r.text()).then(csv=>{
+        const rows = csv.trim().split('\n').slice(1).map(r=>r.split(','));
+        // Lấy bản ghi mới nhất mỗi email
+        const latest = {};
+        rows.forEach(r=>{
+          const [ts,email,shift,lat,lon] = r;
+          if (!email) return;
+          const t = new Date(ts).getTime();
+          if (!(email in latest) || t > latest[email].t) {
+            latest[email] = {t,shift,lat:parseFloat(lat),lon:parseFloat(lon)};
+          }
+        });
+        crewLayer.clearLayers();
+        const filter = document.getElementById('shift').value;
+        Object.entries(latest).forEach(([email,data])=>{
+          if (filter && data.shift !== filter) return;
+          // Màu theo shift
+          const color = data.shift==='CA01'?'red': data.shift==='CA02'?'blue':'green';
+          const marker = L.circleMarker([data.lat,data.lon], {
+            radius:8, fillColor:color, color:'#333', weight:1, fillOpacity:0.9
+          }).addTo(crewLayer);
+          marker.bindPopup(
+            `<b>${email}</b><br>Ca: ${data.shift}<br>Trạng thái: On-Duty`
+          );
+        });
+      });
+    }
+
+    // Ví dụ POI tĩnh (ví dụ bệnh viện, UBND)
+    const poiData = [
+      {name:'Bệnh viện Thới Bình', coords:[9.999,105.810]},
+      {name:'UBND Thới Bình', coords:[9.995,105.815]},
+    ];
+    poiData.forEach(p=>{
+      L.marker(p.coords, {icon:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/684/684908.png', iconSize:[24,24]})})
+       .bindTooltip(p.name).addTo(poiLayer);
+    });
+    poiLayer.clearLayers(); // mặc định tắt
+
+    // Event
+    document.getElementById('btn-refresh').onclick = loadCrew;
+    document.getElementById('shift').onchange = loadCrew;
+    document.getElementById('btn-poi').onclick = ()=>{
+      if (map.hasLayer(poiLayer)) map.removeLayer(poiLayer);
+      else poiLayer.addTo(map);
+    };
+
+    // Bottom nav (chỉ giả lập active)
+    document.querySelectorAll('#bottom-nav .nav-item').forEach(el=>{
+      el.onclick =()=>{
+        document.querySelectorAll('#bottom-nav .nav-item').forEach(x=>x.classList.remove('active'));
+        el.classList.add('active');
+        // TODO: chuyển tab nội dung tương ứng
+      };
+    });
+
+    // Chạy lần đầu
+    loadCrew();
+  </script>
+</body>
+</html>
