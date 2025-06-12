@@ -1,4 +1,4 @@
-const WEB_APP_URL = 'https://dlthoibinh.github.io/crew-checkin-pwa/';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
 let checkingIn = false, watchIntervalId = null;
 
 function sendLocation(email, shift) {
