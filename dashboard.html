@@ -62,32 +62,47 @@
     function loadData() {
       markers.clearLayers();
       const selectedShift = document.getElementById('shift').value;
+      
       Papa.parse(SHEET_CSV_URL, {
         download: true,
         header: true,
         complete: function(results) {
-          // results.data là array of objects
+          // 1) build map: email → latest record
+          const latest = {};
           results.data.forEach(row => {
-            const lat = parseFloat(row.Lat);
-            const lon = parseFloat(row.Lon);
-            const shift = row.ShiftCode;
+            const ts    = new Date(row.Timestamp).getTime();
             const email = row.Email;
-            if (!lat || !lon) return;
+            const shift = row.ShiftCode;
+            if (!row.Lat || !row.Lon) return;
             if (selectedShift && shift !== selectedShift) return;
-            // Tạo marker
-            L.marker([lat, lon])
+            // nếu chưa có record này hoặc timestamp lớn hơn, cập nhật
+            if (!latest[email] || ts > latest[email].ts) {
+              latest[email] = {
+                ts, lat: parseFloat(row.Lat),
+                lon: parseFloat(row.Lon),
+                email, shift, when: row.Timestamp
+              };
+            }
+          });
+    
+          // 2) vẽ marker cho từng latest[email]
+          Object.values(latest).forEach(p => {
+            L.marker([p.lat, p.lon])
              .bindPopup(
-               `<b>${email}</b><br>Ca: ${shift}`
+               `<b>${p.email}</b><br>Ca: ${p.shift}<br>`
+              + `Lúc: ${p.when}`
              )
              .addTo(markers);
           });
-          // Zoom đến bao vừa tất cả markers
+    
+          // 3) zoom để bao đủ
           if (markers.getLayers().length) {
             map.fitBounds(markers.getBounds().pad(0.2));
           }
         }
       });
     }
+
 
     // Gắn sự kiện cho button Refresh
     document.getElementById('refresh')
