@@ -82,14 +82,12 @@ async function loadData(){
     console.log('▶️ tải CSV', CSV_URL);
     const csv = await fetchCSV();
     Papa.parse(csv,{
-      header:true,
-      skipEmptyLines:true,
-      complete: res=>{
-        if(res.errors.length){ logErr('Parse CSV lỗi'); return;}
-        if(!res.data.length){ logErr('Sheet trống'); return;}
-        buildShiftList(res.data);
-        drawMarkers(res.data);
-        msg.textContent='';
+      header: true,
+      skipEmptyLines: true,
+      // 👉 nếu chưa biết chắc delimiter, để dynamic:
+      delimiter: (csv.indexOf(';') > csv.indexOf(',')) ? ';' : ',',
+      complete: res => {
+          ...
       }
     });
   }catch(e){ logErr('Không tải được dữ liệu: '+e); }
