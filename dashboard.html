@@ -44,43 +44,45 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- PapaParse để parse CSV -->
+  <!-- PapaParse để parse TSV -->
   <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
 
   <script>
-    // URL CSV public từ Google Sheets (Publish → CSV)
-    const SHEET_CSV_URL =
+    // 1) URL TSV public của Google Sheet:
+    const SHEET_TSV_URL =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'
-      + '/pub?gid=0&single=true&output=csv';
+      + '/pub?gid=0&single=true&output=tsv';
 
-    // Khởi tạo map
+    // 2) Khởi tạo bản đồ Leaflet
     const map = L.map('map').setView([10.0,106.6],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // Layer group chứa marker
+    // 3) Layer group chứa marker
     const markers = L.layerGroup().addTo(map);
 
-    // Load & render dữ liệu
+    // 4) Hàm load & hiển thị dữ liệu
     function loadData() {
       markers.clearLayers();
       const sel = document.getElementById('shift').value;
 
-      Papa.parse(SHEET_CSV_URL, {
+      Papa.parse(SHEET_TSV_URL, {
         download: true,
         header: true,
-        complete: function(results) {
+        delimiter: '\t',         // parse TSV
+        complete: results => {
           // Tập hợp bản ghi mới nhất cho mỗi Email
           const latest = {};
           results.data.forEach(row => {
-            // Lấy chuỗi lat/lon, thay ',' thành '.'
-            let latS = (row.Lat || row.latitude || '').replace(',', '.').trim();
-            let lonS = (row.Lon || row.longitude || '').replace(',', '.').trim();
-            const ts = Date.parse(row.Timestamp);
+            // Lấy và chuẩn hoá chuỗi Lat/Lon
+            let latS = (row.Lat || '').replace(',', '.').trim();
+            let lonS = (row.Lon || '').replace(',', '.').trim();
+            const ts    = Date.parse(row.Timestamp);
             const email = row.Email;
             const shift = row.ShiftCode;
 
+            // Bỏ qua nếu thiếu dữ liệu hoặc không đúng ca
             if (!latS || !lonS || isNaN(ts)) return;
             if (sel && shift !== sel) return;
 
@@ -88,7 +90,7 @@
             const lon = parseFloat(lonS);
             if (isNaN(lat) || isNaN(lon)) return;
 
-            // Cập nhật nếu mới hơn
+            // Cập nhật nếu bản ghi mới hơn
             if (!latest[email] || ts > latest[email].ts) {
               latest[email] = { ts, lat, lon, email, shift, when: row.Timestamp };
             }
@@ -104,7 +106,7 @@
              .addTo(markers);
           });
 
-          // Zoom map
+          // Zoom để bao hết tất cả markers
           const all = markers.getLayers();
           if (all.length) {
             const group = L.featureGroup(all);
@@ -114,11 +116,8 @@
       });
     }
 
-    // Sự kiện nút Refresh
-    document.getElementById('refresh')
-      .addEventListener('click', loadData);
-
-    // Tải dữ liệu ngay khi mở trang
+    // 5) Gắn sự kiện cho nút Refresh và tự gọi load khi lên trang
+    document.getElementById('refresh').addEventListener('click', loadData);
     window.addEventListener('load', loadData);
   </script>
 </body>
