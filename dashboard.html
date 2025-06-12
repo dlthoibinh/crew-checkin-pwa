@@ -6,10 +6,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet/dist/leaflet.css"
-  />
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet/dist/leaflet.css">
 
   <style>
     body, html { margin:0; padding:0; height:100%; }
@@ -48,21 +46,21 @@
   <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
 
   <script>
-    // 1) URL TSV public của Google Sheet:
+    // URL TSV public của sheet LOG (gid=0 nếu LOG là tab đầu)
     const SHEET_TSV_URL =
       'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'
       + '/pub?gid=0&single=true&output=tsv';
 
-    // 2) Khởi tạo bản đồ Leaflet
+    // Khởi tạo map
     const map = L.map('map').setView([10.0,106.6],8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap contributors'
     }).addTo(map);
 
-    // 3) Layer group chứa marker
+    // layer group chứa marker
     const markers = L.layerGroup().addTo(map);
 
-    // 4) Hàm load & hiển thị dữ liệu
+    // load & hiển thị
     function loadData() {
       markers.clearLayers();
       const sel = document.getElementById('shift').value;
@@ -70,54 +68,48 @@
       Papa.parse(SHEET_TSV_URL, {
         download: true,
         header: true,
-        delimiter: '\t',         // parse TSV
+        delimiter: '\t',
+        skipEmptyLines: true,
         complete: results => {
-          // Tập hợp bản ghi mới nhất cho mỗi Email
+          // latest[email] = bản ghi cuối cùng trong CSV
           const latest = {};
           results.data.forEach(row => {
-            // Lấy và chuẩn hoá chuỗi Lat/Lon
-            let latS = (row.Lat || '').replace(',', '.').trim();
-            let lonS = (row.Lon || '').replace(',', '.').trim();
-            const ts    = Date.parse(row.Timestamp);
-            const email = row.Email;
-            const shift = row.ShiftCode;
-
-            // Bỏ qua nếu thiếu dữ liệu hoặc không đúng ca
-            if (!latS || !lonS || isNaN(ts)) return;
+            const email = row.Email?.trim();
+            const shift = row.ShiftCode?.trim();
+            if (!email || !shift) return;
             if (sel && shift !== sel) return;
 
-            const lat = parseFloat(latS);
-            const lon = parseFloat(lonS);
+            // chuyển dấu phẩy thập phân
+            const latS = (row.Lat  || '').replace(',', '.').trim();
+            const lonS = (row.Lon  || '').replace(',', '.').trim();
+            const lat  = parseFloat(latS);
+            const lon  = parseFloat(lonS);
             if (isNaN(lat) || isNaN(lon)) return;
 
-            // Cập nhật nếu bản ghi mới hơn
-            if (!latest[email] || ts > latest[email].ts) {
-              latest[email] = { ts, lat, lon, email, shift, when: row.Timestamp };
-            }
+            // ghi đè (cuối cùng là mới nhất)
+            latest[email] = { email, shift, lat, lon, when: row.Timestamp };
           });
 
-          // Vẽ marker cho mỗi nhân viên
+          // vẽ marker
           Object.values(latest).forEach(p => {
             L.marker([p.lat, p.lon])
              .bindPopup(
-               `<b>${p.email}</b><br>Ca: ${p.shift}<br>` +
-               `Lúc: ${p.when}`
+               `<b>${p.email}</b><br>Ca: ${p.shift}` +
+               `<br>Lúc: ${p.when}`
              )
              .addTo(markers);
           });
 
-          // Zoom để bao hết tất cả markers
+          // zoom
           const all = markers.getLayers();
           if (all.length) {
-            const group = L.featureGroup(all);
-            map.fitBounds(group.getBounds().pad(0.2));
+            map.fitBounds(L.featureGroup(all).getBounds().pad(0.2));
           }
         }
       });
     }
 
-    // 5) Gắn sự kiện cho nút Refresh và tự gọi load khi lên trang
-    document.getElementById('refresh').addEventListener('click', loadData);
+    document.getElementById('refresh').onclick = loadData;
     window.addEventListener('load', loadData);
   </script>
 </body>
