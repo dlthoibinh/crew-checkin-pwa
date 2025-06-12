@@ -5,78 +5,64 @@
 <title>Crew Check-in – Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-      integrity="sha512-sA+e2sTL4nFzB7qTjT3kU+/9V+7sHEyM5eEI6e7EU8ev/9B0MEvjB+Efh5E7MdbYQZhx5p1YvhfAw4BZi6FOg==" crossorigin/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha512-mQtfMYr4SWhM6NZEzzX+FJ6rJndXb0WzFzIu/O6Rg8xBr4Z7hX4O5dAYrxwJf9xZQ7JwUrCJv6yUXZoB5hXOg==" crossorigin></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 
 <style>
- html,body{margin:0;height:100%;font-family:system-ui,-apple-system,"Segoe UI",Roboto}
- #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.08);z-index:9}
- select,button{padding:.3rem .6rem;font-size:15px}
- #msg{font-size:14px;color:#666}
+ html,body{margin:0;height:100%}
+ #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.07)}
  #map{height:calc(100% - 46px)}
- .leaflet-popup-content{font-size:14px;line-height:1.3}
+ select,button{padding:.3rem .6rem;font-size:15px}
 </style>
 </head>
 <body>
- <div id="bar">
-   <label>Chọn ca:</label>
-   <select id="shift"><option value="">— Tất cả ca —</option>
-     <option>CA01</option><option>CA02</option><option>CA03</option></select>
-   <button id="reload">Refresh</button><span id="msg"></span>
- </div>
- <div id="map"></div>
+  <div id="bar">
+    <label>Chọn ca:</label>
+    <select id="shift"><option value="">— Tất cả ca —</option><option>CA01</option><option>CA02</option></select>
+    <button id="reload">Refresh</button><span id="msg"></span>
+  </div>
+  <div id="map"></div>
 
-<script>
-/*────────────── CONFIG – URL JSONP của Sheet (Publish to web → CSV) */
-const SHEET_JSONP =
-  'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub'
-+ '?gid=963908913&single=true&output=csv'  // không đổi gid!
+  <!-- LUÔN đặt trước code của mình -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-/*────────────── Map */
-const map  = L.map('map').setView([10.3,106.2],7);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'© OpenStreetMap'}).addTo(map);
-const layer = L.layerGroup().addTo(map);
+  <script>
+  /* URL CSV publish to web */
+  const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-const shiftSel = document.getElementById('shift');
-document.getElementById('reload').onclick = load;
-window.addEventListener('load',load);
+  window.addEventListener('load', () => {
+    const map   = L.map('map').setView([10.3,106.2],7);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                {attribution:'© OSM'}).addTo(map);
+    const layer = L.layerGroup().addTo(map);
 
-function msg(t){document.getElementById('msg').textContent=t;}
+    document.getElementById('reload').onclick = load;
+    load();
 
-/*────────────── JSONP tải Sheet CSV → parse */
-function load(){
-  msg('Đang tải dữ liệu…');
-  layer.clearLayers();
-  const url = SHEET_JSONP+'&t='+Date.now();        // bust cache
-  fetch(url).then(r=>r.text()).then(text=>{
-      // Chuyển CSV thành mảng dòng, tách cột bằng “,”
-      const rows = text.trim().split(/\r?\n/).map(l=>l.split(','));
-      rows.shift();                                // bỏ header
+    function msg(t){document.getElementById('msg').textContent=t;}
 
-      const sel = shiftSel.value||null;
-      const pts=[];
-      rows.forEach(r=>{
-          const email=r[1],shift=r[2],lat=parseFloat(r[3]),lon=parseFloat(r[4]);
-          if(isNaN(lat)||isNaN(lon)) return;
-          if(sel && shift!==sel) return;
-          L.marker([lat,lon])
-            .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
-            .addTo(layer);
-          pts.push([lat,lon]);
-      });
-      if(pts.length){
-        map.fitBounds(pts,{padding:[30,30]});
-        msg(`Hiển thị ${pts.length} vị trí`);
-      }else msg('Không có dữ liệū');
-  }).catch(e=>{
-      console.error(e);
-      msg('Lỗi tải dữ liệu');
-      alert('Không tải được dữ liệu: '+e);
+    function load(){
+      msg('Đang tải…'); layer.clearLayers();
+      fetch(CSV_URL+'&t='+Date.now())
+        .then(r=>r.text())
+        .then(csv=>{
+          const rows = csv.trim().split(/\r?\n/).map(l=>l.split(','));
+          rows.shift();
+          const shiftSel = document.getElementById('shift').value||null;
+          const pts=[];
+          rows.forEach(r=>{
+            const [ ,email,shift,lat,lon] = r;
+            if(shiftSel && shift!==shiftSel) return;
+            const la=+lat, lo=+lon;
+            if(!la||!lo) return;
+            L.marker([la,lo]).bindPopup(`<b>${email}</b><br>Ca: ${shift}`).addTo(layer);
+            pts.push([la,lo]);
+          });
+          pts.length ? (map.fitBounds(pts,{padding:[30,30]}),msg(`Hiển thị ${pts.length}`))
+                      : msg('Không có dữ liệu');
+        })
+        .catch(e=>{console.error(e);msg('Lỗi tải');});
+    }
   });
-}
-</script>
+  </script>
 </body>
 </html>
