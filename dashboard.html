@@ -11,9 +11,8 @@
 
 <style>
   html,body{margin:0;height:100%}
-  #bar{display:flex;gap:.6rem;align-items:center;
-       padding:.4rem .6rem;background:#fafafa;
-       box-shadow:0 1px 3px rgba(0,0,0,.08);
+  #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;
+       background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.08);
        font:15px system-ui,Arial}
   #map{height:calc(100% - 46px)}
   select,button{padding:.3rem .6rem;font-size:15px}
@@ -22,80 +21,92 @@
 </head>
 <body>
 
-  <!-- thanh công cụ -->
-  <div id="bar">
-    <label>Chọn ca:&nbsp;</label>
-    <select id="shift">
-      <option value="">— Tất cả ca —</option>
-      <option>CA01</option><option>CA02</option><option>CA03</option>
-    </select>
-    <button id="reload">Refresh</button>
-    <span id="msg"></span>
-  </div>
+<!-- thanh công cụ -->
+<div id="bar">
+  <label>Chọn ca:&nbsp;</label>
+  <select id="shift">
+    <option value="">— Tất cả ca —</option>
+    <option>CA01</option><option>CA02</option><option>CA03</option>
+  </select>
+  <button id="reload">Refresh</button>
+  <span id="msg"></span>
+</div>
 
-  <div id="map"></div>
+<div id="map"></div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/*═══════════════  CẤU HÌNH  ═══════════════*/
+const SHEET_ID  = '1MIILXBmdKFzSB9QPZrwk4sb_Cm1S-n1GFM3VUduLpW'; // ID thật của file
+const TAB_NAME  = 'LOG';            // tên sheet
+const AUTO_MS   = 60_000;           // tự reload 60 giây/lần
 
-  <script>
-  /* ──────────────── CẤU HÌNH ──────────────── */
-  const SHEET_ID  = '1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'; // thay bằng ID của anh
-  const TAB_NAME  = 'LOG';           // đúng tên sheet
-  const JSON_URL  = `https://opensheet.elk.sh/${SHEET_ID}/${TAB_NAME}`;
-  const AUTO_REFRESH_MS = 60_000;    // 60 giây
+/*═══════════════  KHỞI TẠO  ═══════════════*/
+window.addEventListener('load', () => {
+  /* 1. Bản đồ */
+  const map = L.map('map').setView([9.5,106.4], 7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+              {attribution:'© OpenStreetMap'}).addTo(map);
+  const markers = L.layerGroup().addTo(map);
 
-  /* ──────────────── KHỞI TẠO ──────────────── */
-  window.addEventListener('load', () => {
-    /* 1. Bản đồ */
-    const map = L.map('map').setView([10.3,106.2], 7);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                {attribution:'© OpenStreetMap'}).addTo(map);
-    const markers = L.layerGroup().addTo(map);
+  /* 2. Tiện ích DOM */
+  const $   = id => document.getElementById(id);
+  const msg = t  => $('msg').textContent = t;
 
-    /* 2. Tiện ích DOM */
-    const $   = id => document.getElementById(id);
-    const msg = t  => $('msg').textContent = t;
+  /* 3. Lấy dữ liệu JSON qua OpenSheet (đã có CORS) */
+  const jsonURL = tab =>
+    `https://opensheet.elk.sh/${SHEET_ID}/${encodeURIComponent(tab)}?t=` + Date.now();
 
-    /* 3. Hàm tải & hiển thị */
-    async function load() {
-      msg('Đang tải dữ liệu…');
-      markers.clearLayers();
+  async function fetchSheet() {
+    const r = await fetch(jsonURL(TAB_NAME));
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    const data = await r.json();
+    if (!Array.isArray(data))
+      throw new Error(data.error || 'Không phải mảng dữ liệu');
+    return data;
+  }
 
-      try {
-        const rows = await fetch(JSON_URL + '?t=' + Date.now()).then(r => r.json());
-        const sel  = $('shift').value || null;
-        const pts  = [];
+  /* 4. Vẽ marker */
+  async function load() {
+    msg('Đang tải dữ liệu…');
+    markers.clearLayers();
 
-        rows.forEach(r => {
-          if (sel && r.shift !== sel) return;
-          const la = +r.lat, lo = +r.lon;
-          if (!la || !lo) return;
-          L.marker([la, lo])
-            .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
-            .addTo(markers);
-          pts.push([la, lo]);
-        });
+    try {
+      const rows = await fetchSheet();
+      const sel  = $('shift').value || null;
+      const pts  = [];
 
-        if (pts.length) {
-          map.fitBounds(pts, {padding:[30,30]});
-          msg(`Hiển thị ${pts.length} vị trí • Cập nhật: ${new Date().toLocaleTimeString()}`);
-        } else {
-          msg('Không có dữ liệu phù hợp');
-        }
-      } catch (err) {
-        console.error(err);
-        alert('Không tải được dữ liệu: ' + err.message);
-        msg('Lỗi tải dữ liệu');
+      rows.forEach(r => {
+        if (sel && r.ShiftCode !== sel) return;     // lọc ca
+        const lat = parseFloat(r.Lat),
+              lon = parseFloat(r.Lon);
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+        L.marker([lat, lon])
+          .bindPopup(`<b>${r.Email}</b><br>Ca: ${r.ShiftCode}`)
+          .addTo(markers);
+        pts.push([lat, lon]);
+      });
+
+      if (pts.length) {
+        map.fitBounds(pts, {padding:[30,30]});
+        msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
+      } else {
+        msg('Không có dữ liệu phù hợp');
       }
-    }
 
-    /* 4. Sự kiện & auto-refresh */
-    $('reload').onclick  = load;
-    $('shift').onchange  = load;
-    load();                             // lần đầu
-    setInterval(load, AUTO_REFRESH_MS); // tự làm mới
-  });
-  </script>
+    } catch (e) {
+      console.error(e);
+      alert('Không tải được dữ liệu: ' + e.message);
+      msg('Lỗi tải dữ liệu');
+    }
+  }
+
+  /* 5. Sự kiện & auto-refresh */
+  $('reload').onclick = load;
+  $('shift').onchange = load;
+  load();                      // tải ngay
+  setInterval(load, AUTO_MS);  // làm mới định kỳ
+});
+</script>
 </body>
 </html>
