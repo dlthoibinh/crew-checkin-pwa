@@ -14,6 +14,17 @@
   #map{height:calc(100% - 46px)}
   select,button{padding:.3rem .6rem;font-size:15px}
   #msg{margin-left:auto;font-style:italic;color:#555}
+
+  /* Tooltip style */
+  .leaflet-tooltip.permanent{
+    background:rgba(255,255,255,.85);
+    border:1px solid #3887BE;
+    border-radius:4px;
+    padding:2px 6px;
+    font-size:13px;
+    color:#000;
+    box-shadow:0 1px 3px rgba(0,0,0,.2);
+  }
 </style>
 </head>
 <body>
@@ -27,15 +38,18 @@
   <button id="reload">Refresh</button>
   <span id="msg"></span>
 </div>
+
 <div id="map"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/*═══════════ CẤU HÌNH ═══════════*/
-const API_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-const AUTO_MS = 60_000;          // tự reload 60 s
+/*═════════════ CẤU HÌNH ═════════════*/
+const API_URL     = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+const AUTO_MS     = 60_000;    // tự reload mỗi 60 s
+const MAX_MINUTES = 60;        // chỉ lấy check-in trong 60 phút gần nhất (0 = bỏ lọc)
+const EMAIL_FIELD = 'email';   // tên trường email trong JSON trả về
 
-/*═══════════ KHỞI TẠO MAP ═══════════*/
+/*═════════════ KHỞI TẠO BẢN ĐỒ ═════════════*/
 window.addEventListener('load', () => {
   const map = L.map('map').setView([9.5,106.4], 7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -45,46 +59,75 @@ window.addEventListener('load', () => {
   const $   = id => document.getElementById(id);
   const msg = t  => $('msg').textContent = t;
 
-  /* callback JSONP toàn cục */
+  /* callback JSONP – toàn cục */
   window.updateCrew = data => {
-    if (data.status !== 'OK') return msg('API lỗi: '+ (data.message||'??'));
-
     markers.clearLayers();
-    const sel = $('shift').value || null;
-    const pts = [];
+    if (data.status !== 'OK'){
+      msg('API lỗi: ' + (data.message||'??')); return;
+    }
 
-    data.rows.forEach(r=>{
-      if(sel && r.shift!==sel) return;
-      const la = +r.lat, lo = +r.lon;
-      if(!la || !lo) return;
-      L.marker([la,lo])
-        .bindPopup(`<b>${r.email}</b><br>Ca: ${r.shift}`)
-        .addTo(markers);
-      pts.push([la,lo]);
+    const sel = $('shift').value || null;
+    const latest = {};                 // email → bản ghi mới nhất
+    const now = Date.now();
+
+    data.rows.forEach(r => {
+      /* 1. Lọc theo ca (nếu chọn) */
+      if (sel && r.shift !== sel) return;
+
+      /* 2. Lọc theo thời gian gần nhất */
+      if (MAX_MINUTES){
+        const ts = new Date(r.timestamp || r.Timestamp).getTime();
+        if (!ts || (now - ts) > MAX_MINUTES*60*1000) return;
+        r._ts = ts;                     // cache
+      }
+
+      /* 3. Giữ bản ghi mới nhất của mỗi email */
+      const key = r[EMAIL_FIELD];
+      if (!latest[key] || (r._ts && r._ts > latest[key]._ts))
+        latest[key] = r;
     });
 
-    if(pts.length){
+    const pts = [];
+    Object.values(latest).forEach(r=>{
+      const la = +r.lat, lo = +r.lon;
+      if (!Number.isFinite(la)||!Number.isFinite(lo)) return;
+
+      L.marker([la, lo])
+        .bindTooltip(
+          `<b>${r.email}</b><br>Ca: ${r.shift}`,
+          {permanent:true, direction:'top', offset:[0,-10], opacity:0.9}
+        )
+        .addTo(markers);
+      pts.push([la, lo]);
+    });
+
+    if (pts.length){
       map.fitBounds(pts,{padding:[30,30]});
       msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
-    }else msg('Không có dữ liệu phù hợp');
+    }else{
+      msg('Không có dữ liệu phù hợp');
+    }
   };
 
+  /* Hàm nạp JSONP */
   function load(){
     msg('Đang tải dữ liệu…');
-    /* xoá script cũ (nếu có) */
-    document.querySelectorAll('script[data-crew]').forEach(s=>s.remove());
+    /* xoá script JSONP cũ (nếu có) */
+    document.querySelectorAll('script[data-jsonp]').forEach(s=>s.remove());
 
     const s = document.createElement('script');
-    s.src = API_URL + '?list=1'
-            + '&shift=' + encodeURIComponent($('shift').value||'')
-            + '&callback=updateCrew&t=' + Date.now();
-    s.dataset.crew = 1;
+    s.src = API_URL
+           + '?list=1'
+           + '&shift=' + encodeURIComponent($('shift').value||'')
+           + '&callback=updateCrew&t=' + Date.now();
+    s.dataset.jsonp = '1';
     document.body.appendChild(s);
   }
 
   $('reload').onclick = load;
   $('shift').onchange = load;
-  load(); setInterval(load,AUTO_MS);
+  load();                      // lần đầu
+  setInterval(load, AUTO_MS);  // tự làm mới
 });
 </script>
 </body>
