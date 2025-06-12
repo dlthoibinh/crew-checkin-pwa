@@ -37,52 +37,56 @@
   <!-- Leaflet & PapaParse -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
-
   <script>
-    // 1) Dán URL CSV bạn đã Publish:
-    const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+    // 1) URL CSV Google Sheet đã Publish → ‘output=csv’
+    const CSV_URL =
+      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-    // 2) Khởi tạo map
-    const map = L.map('map').setView([10.0,106.6],8);
+    // 2) Khởi tạo map Leaflet
+    const map = L.map('map').setView([10.0, 106.6], 8);
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '&copy; OpenStreetMap'
     }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // 3) Load & hiển thị
-    function loadData() {
+    // 3) Hàm load + parse CSV
+    async function loadData() {
       markers.clearLayers();
       const sel = document.getElementById('shift').value;
-      Papa.parse(CSV_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: results => {
-          console.clear();
-          console.log('Loaded rows:', results.data.length);
-          results.data.forEach(r => {
-            const lat = parseFloat(r.Lat.replace(',','.'));
-            const lon = parseFloat(r.Lon.replace(',','.'));
-            const shift = r.ShiftCode;
-            const email = r.Email;
-            if (!lat||!lon) return;
-            if (sel && shift !== sel) return;
-            L.marker([lat,lon])
-             .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
-             .addTo(markers);
-          });
-          // Zoom to markers
-          if (markers.getLayers().length) {
-            map.fitBounds(markers.getBounds().pad(0.2));
-          }
-        },
-        error: err => console.error('PapaParse error:', err)
-      });
+      try {
+        const res = await fetch(CSV_URL);
+        if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+        const text = await res.text();
+        // parse text CSV
+        const { data, errors } = Papa.parse(text, {
+          header: true,
+          skipEmptyLines: true,
+        });
+        if (errors.length) console.warn('Parse errors:', errors);
+        console.log('Loaded rows:', data.length);
+        data.forEach(r => {
+          // Google CSV có thể dùng dấu ',' trong số thập phân
+          const lat = parseFloat(r.Lat.replace(',', '.'));
+          const lon = parseFloat(r.Lon.replace(',', '.'));
+          const shift = r.ShiftCode;
+          const email = r.Email;
+          if (!lat || !lon) return;
+          if (sel && shift !== sel) return;
+          L.marker([lat, lon])
+           .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+           .addTo(markers);
+        });
+        if (markers.getLayers().length) {
+          map.fitBounds(markers.getBounds().pad(0.2));
+        }
+      } catch (e) {
+        console.error('Fetch/Parse lỗi:', e);
+        alert('Không tải được dữ liệu: ' + e.message);
+      }
     }
 
     document.getElementById('refresh').onclick = loadData;
     window.addEventListener('load', loadData);
   </script>
-
 </body>
 </html>
