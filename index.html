@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Crew Check-In</title>
+  <link rel="manifest" href="manifest.json">
+  <style>
+    body{font-family:sans-serif;max-width:400px;margin:1rem auto;padding:0;}
+    input,select,button{width:100%;margin:.5rem 0;padding:.5rem;font-size:1rem;}
+    #status{margin-top:1rem;color:#555;}
+  </style>
+</head>
+<body>
+  <h2>Check-In / Check-Out Ca Trực</h2>
+  <input id="email" type="email" placeholder="Email (you@company.com)">
+  <select id="shift">
+    <option>CA01</option><option>CA02</option><option>CA03</option>
+  </select>
+  <button id="btn">Bắt đầu ca</button>
+  <div id="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
