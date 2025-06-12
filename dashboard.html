@@ -3,106 +3,95 @@
 <head>
   <meta charset="utf-8">
   <title>Dashboard – Crew Check-In</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Leaflet CSS -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
   <style>
     body, html { margin:0; padding:0; height:100%; }
-    #controls { height:50px; padding:8px; display:flex;align-items:center;
-                gap:12px;background:#f8f8f8;font-family:sans-serif;
-                box-shadow:0 1px 2px rgba(0,0,0,0.1); }
-    select, button { padding:6px 12px; font-size:14px;
-                     border:1px solid #ccc;border-radius:4px;
-                     background:#fff;cursor:pointer; }
-    #map { width:100%; height:calc(100% - 50px); }
+    #controls { padding:8px; background:#f8f8f8; display:flex; gap:8px; }
+    #map { width:100%; height:calc(100% - 48px); }
   </style>
 </head>
 <body>
+
   <div id="controls">
-    <label for="shift">Chọn ca:</label>
-    <select id="shift">
-      <option value="">— Tất cả ca —</option>
-      <option>CA01</option>
-      <option>CA02</option>
-      <option>CA03</option>
-    </select>
+    <label>Chọn ca:
+      <select id="shift">
+        <option value="">— Tất cả ca —</option>
+        <option>CA01</option>
+        <option>CA02</option>
+        <option>CA03</option>
+      </select>
+    </label>
     <button id="refresh">Refresh</button>
   </div>
   <div id="map"></div>
 
+  <!-- Leaflet & jQuery (JSONP helper) -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
   <script>
-    // 1) GID tab LOG và key của sheet
-    const SHEET_GID = '963908913';
+    // 1) Thay YOUR_SHEET_KEY và SHEET_GID cho đúng (đã publish)
     const SHEET_KEY = '2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5';
-    const GVIZ_URL = `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq?gid=${SHEET_GID}`;
+    const SHEET_GID = '963908913';
+
+    // Hàm build URL JSONP
+    function buildJsonpUrl() {
+      const base = `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq`;
+      const params = $.param({
+        gid:    SHEET_GID,
+        tqx:    'out:json',
+        tq:     '',               // có thể thêm query SQL nếu muốn
+        responseHandler: 'onData' // tên callback
+      });
+      return `${base}?${params}`;
+    }
 
     // 2) Khởi tạo map
-    const map = L.map('map').setView([10.0,106.6],8);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-      attribution:'&copy; OpenStreetMap contributors'
+    const map = L.map('map').setView([10.0, 106.6], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap'
     }).addTo(map);
     const markers = L.layerGroup().addTo(map);
 
-    // 3) Hàm load JSONP và vẽ marker
-    function loadData() {
+    // 3) Callback JSONP
+    function onData(json) {
       console.clear();
-      console.log('▶ loadData() => JSONP từ:', GVIZ_URL);
       markers.clearLayers();
+      const rows = json.table.rows;
+      console.log('▶ onData:', rows.length, 'rows');
       const sel = document.getElementById('shift').value;
-
-      // Đăng ký callback
-      window.mySheetCallback = function(res) {
-        console.log('◀ mySheetCallback nhận:', res);
-        const cols = res.table.cols.map(c=>c.label);
-        const latest = {};
-
-        res.table.rows.forEach(r => {
-          const row = {};
-          cols.forEach((label,i)=>
-            row[label] = r.c[i]?.v
-          );
-          if (!row.Email || !row.ShiftCode) return;
-          if (sel && row.ShiftCode !== sel) return;
-          const lat = parseFloat(String(row.Lat).replace(',', '.'));
-          const lon = parseFloat(String(row.Lon).replace(',', '.'));
-          if (isNaN(lat)||isNaN(lon)) return;
-          latest[row.Email] = {
-            email: row.Email,
-            shift: row.ShiftCode,
-            when:  row.Timestamp,
-            lat, lon
-          };
-        });
-
-        Object.values(latest).forEach(p => {
-          L.marker([p.lat,p.lon])
-           .bindPopup(`<b>${p.email}</b><br>Ca: ${p.shift}<br>Lúc: ${p.when}`)
-           .addTo(markers);
-        });
-
-        const all = markers.getLayers();
-        if (all.length) {
-          map.fitBounds(L.featureGroup(all).getBounds().pad(0.2));
-          console.log(`★ Đã vẽ ${all.length} marker(s).`);
-        } else {
-          console.log('⚠️ Không có marker nào (có thể không có dữ liệu hoặc filter).');
-        }
-
-        // dọn
-        delete window.mySheetCallback;
-      };
-
-      // thêm script JSONP
-      const s = document.createElement('script');
-      s.src = GVIZ_URL + '&tqx=out:json&responseHandler=mySheetCallback';
-      document.body.appendChild(s);
-      console.log('→ Script JSONP append với src=', s.src);
-      // remove sau 30s
-      setTimeout(()=>document.body.removeChild(s),30000);
+      rows.forEach(r => {
+        const c = r.c;
+        const email = c[1]?.v;
+        const shift = c[2]?.v;
+        const lat   = parseFloat(c[3]?.v);
+        const lon   = parseFloat(c[4]?.v);
+        if (!lat || !lon) return;
+        if (sel && shift !== sel) return;
+        L.marker([lat, lon])
+         .bindPopup(`<b>${email}</b><br>Ca: ${shift}`)
+         .addTo(markers);
+      });
+      if (markers.getLayers().length) {
+        map.fitBounds(markers.getBounds().pad(0.2));
+      }
     }
 
-    document.getElementById('refresh').onclick = loadData;
+    // 4) Nạp JSONP
+    function loadData() {
+      console.log('▶ loadData() → JSONP từ:', buildJsonpUrl());
+      const script = document.createElement('script');
+      script.src = buildJsonpUrl();
+      document.body.appendChild(script);
+      // xoá tag cũ để mỗi lần load lại nó fresh
+      setTimeout(()=>document.body.removeChild(script), 30_000);
+    }
+
+    document.getElementById('refresh').addEventListener('click', loadData);
     window.addEventListener('load', loadData);
   </script>
+
 </body>
 </html>
