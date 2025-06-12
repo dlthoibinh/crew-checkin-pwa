@@ -6,16 +6,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
 
   <!-- Leaflet CSS -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 
   <style>
     body, html { margin:0; padding:0; height:100%; }
     #controls {
       height:50px; padding:8px;
       background:#f8f8f8; display:flex; align-items:center;
-      gap:12px; box-shadow:0 1px 2px rgba(0,0,0,0.1);
-      font-family:sans-serif;
+      gap:12px; font-family:sans-serif;
+      box-shadow:0 1px 2px rgba(0,0,0,0.1);
     }
     select, button {
       padding:6px 12px; font-size:14px;
@@ -42,71 +41,81 @@
 
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-  <!-- PapaParse để parse TSV -->
-  <script src="https://unpkg.com/papaparse@5.3.1/papaparse.min.js"></script>
 
   <script>
-    // URL TSV public của sheet LOG (gid=0 nếu LOG là tab đầu)
-    const SHEET_TSV_URL =
-      'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5'
-      + '/pub?gid=0&single=true&output=tsv';
+    // 1) Thay YOUR_GID bằng đúng gid của sheet LOG (nhìn URL khi đang mở tab LOG)
+    const SHEET_GID = '0'; // ví dụ: '0' hoặc '123456789'
+    const SHEET_KEY = '2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5';
 
-    // Khởi tạo map
+    // 2) URL Google Visualization API (JSONP)
+    const GVIZ_URL = 
+      `https://docs.google.com/spreadsheets/d/e/${SHEET_KEY}/gviz/tq?gid=${SHEET_GID}`;
+
+    // 3) Khởi tạo map Leaflet
     const map = L.map('map').setView([10.0,106.6],8);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'&copy; OpenStreetMap contributors'
     }).addTo(map);
-
-    // layer group chứa marker
     const markers = L.layerGroup().addTo(map);
 
-    // load & hiển thị
+    // 4) Hàm gọi JSONP
     function loadData() {
       markers.clearLayers();
       const sel = document.getElementById('shift').value;
 
-      Papa.parse(SHEET_TSV_URL, {
-        download: true,
-        header: true,
-        delimiter: '\t',
-        skipEmptyLines: true,
-        complete: results => {
-          // latest[email] = bản ghi cuối cùng trong CSV
-          const latest = {};
-          results.data.forEach(row => {
-            const email = row.Email?.trim();
-            const shift = row.ShiftCode?.trim();
-            if (!email || !shift) return;
-            if (sel && shift !== sel) return;
+      // Định nghĩa callback toàn cục
+      window.mySheetCallback = function(response) {
+        const table = response.table;
+        const cols = table.cols.map(c=>c.label);
+        let latest = {};
 
-            // chuyển dấu phẩy thập phân
-            const latS = (row.Lat  || '').replace(',', '.').trim();
-            const lonS = (row.Lon  || '').replace(',', '.').trim();
-            const lat  = parseFloat(latS);
-            const lon  = parseFloat(lonS);
-            if (isNaN(lat) || isNaN(lon)) return;
+        table.rows.forEach(r => {
+          // biến form: { Timestamp, Email, ShiftCode, Lat, Lon }
+          const row = {};
+          cols.forEach((label,i)=> row[label] = r.c[i]?.v);
+          if (!row.Email || !row.ShiftCode) return;
+          if (sel && row.ShiftCode !== sel) return;
 
-            // ghi đè (cuối cùng là mới nhất)
-            latest[email] = { email, shift, lat, lon, when: row.Timestamp };
-          });
+          // parse Lat/Lon (chuyển dấu phẩy)
+          const lat = parseFloat( String(row.Lat).replace(',', '.') );
+          const lon = parseFloat( String(row.Lon).replace(',', '.') );
+          if (isNaN(lat)||isNaN(lon)) return;
 
-          // vẽ marker
-          Object.values(latest).forEach(p => {
-            L.marker([p.lat, p.lon])
-             .bindPopup(
-               `<b>${p.email}</b><br>Ca: ${p.shift}` +
-               `<br>Lúc: ${p.when}`
-             )
-             .addTo(markers);
-          });
+          // ghi đè: dòng cuối cùng là mới nhất
+          latest[row.Email] = {
+            email: row.Email,
+            shift: row.ShiftCode,
+            when : row.Timestamp,
+            lat, lon
+          };
+        });
 
-          // zoom
-          const all = markers.getLayers();
-          if (all.length) {
-            map.fitBounds(L.featureGroup(all).getBounds().pad(0.2));
-          }
+        // vẽ markers
+        Object.values(latest).forEach(p => {
+          L.marker([p.lat,p.lon])
+            .bindPopup(
+              `<b>${p.email}</b><br>Ca: ${p.shift}<br>`+
+              `Lúc: ${p.when}`
+            )
+            .addTo(markers);
+        });
+
+        // zoom
+        const all = markers.getLayers();
+        if (all.length) {
+          map.fitBounds( L.featureGroup(all).getBounds().pad(0.2) );
         }
-      });
+
+        // cleanup
+        delete window.mySheetCallback;
+      };
+
+      // Tạo thẻ <script> JSONP, responseHandler=mySheetCallback
+      const s = document.createElement('script');
+      s.src = `${GVIZ_URL}&tqx=out:json&responseHandler=mySheetCallback`;
+      document.body.appendChild(s);
+      // tự remove thẻ sau 30s
+      setTimeout(()=> document.body.removeChild(s), 30000);
     }
 
     document.getElementById('refresh').onclick = loadData;
