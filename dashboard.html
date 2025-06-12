@@ -1,72 +1,88 @@
-<!DOCTYPE html><html lang="vi"><head>
-<meta charset="utf-8"><title>Dashboard – Crew Check-In</title>
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Bản đồ Ca trực</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <style>
- body,html{margin:0;height:100%} #map{height:calc(100% - 46px)}
- #bar{display:flex;gap:8px;align-items:center;padding:6px 10px;background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.1)}
- select,button{padding:4px 8px;font-size:14px}
-</style></head><body>
+  body,html{margin:0;height:100%}
+  #map{height:calc(100% - 42px)}
+  #bar{display:flex;gap:6px;padding:4px;background:#f7f7f7;
+       box-shadow:0 1px 3px rgba(0,0,0,.15);align-items:center}
+  select,button{padding:5px 9px;font-size:14px}
+  #msg{font-size:14px;color:#b00}
+</style>
+</head>
+<body>
 
 <div id="bar">
-  <label>Chọn ca:
-    <select id="shift"></select>
-  </label>
+  Chọn ca:
+  <select id="shift"></select>
   <button id="btn">Refresh</button>
-  <small id="msg" style="color:#666"></small>
+  <span id="msg"></span>
 </div>
 <div id="map"></div>
 
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.5.2/papaparse.min.js"></script>
 <script>
-/*** ----- CONFIG ----- ***/
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec'; // <- thay URL Apps Script
-const SHEET_CSV  = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
-const CSV_PROXY  = 'https://corsproxy.io/' + encodeURIComponent(SHEET_CSV);
-const AUTO = 60;               // tự refresh (giây) – 0 để tắt
-/**************************/
+const CSV_URL =
+ 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-const map = L.map('map').setView([10.3,105.6],8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'}).addTo(map);
-const markers=L.layerGroup().addTo(map);
+const map = L.map('map').setView([10.4, 105.4], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  {attribution:'©OpenStreetMap'}).addTo(map);
+const layer = L.layerGroup().addTo(map);
 
-const sel=document.getElementById('shift'),msg=document.getElementById('msg');
-document.getElementById('btn').onclick=load;if(AUTO>0) setInterval(load,AUTO*1000);
-window.addEventListener('load',load);
+const $shift = document.getElementById('shift');
+const $msg   = document.getElementById('msg');
 
-async function fetchData(){
-  /* Ưu tiên JSON */
+$shift.innerHTML = '<option value="">— Tất cả ca —</option>'+
+                   ['CA01','CA02','CA03'].map(c=>`<option>${c}</option>`).join('');
+
+/* tải + vẽ */
+async function load(){
+  $msg.textContent='Đang tải dữ liệu';
+  layer.clearLayers();
   try{
-    const r=await fetch(SCRIPT_URL,{cache:'no-store'});   // tránh cache 5-p
-    if(!r.ok) throw 'HTTP '+r.status;
-    return await r.json();          // [{Timestamp,Email,ShiftCode,Lat,Lon},…]
+    const res = await fetch(CSV_URL,{cache:'no-store'});
+    if(!res.ok) throw new Error(res.status);
+    const csv = await res.text();
+    const data = Papa.parse(csv,{header:true}).data;
+
+    const sel = $shift.value||null;
+    let bounds = [];
+    data.forEach(r=>{
+      if(!r.Email) return;                 // dòng trống
+      if(sel && r.ShiftCode!==sel) return; // lọc ca
+
+      let lat = parseFloat(r.Lat.toString().replace(',','.'));
+      let lon = parseFloat(r.Lon.toString().replace(',','.'));
+      if(isNaN(lat)||isNaN(lon)) return;
+
+      L.marker([lat,lon])
+       .bindPopup(`<b>${r.Email}</b><br>Ca: ${r.ShiftCode}`)
+       .addTo(layer);
+      bounds.push([lat,lon]);
+    });
+
+    if(bounds.length){
+      map.fitBounds(bounds,{padding:[30,30]});
+      $msg.textContent=`Hiển thị ${bounds.length} vị trí`;
+    }else{
+      $msg.textContent='Không có dữ liệu';
+    }
   }catch(e){
-    console.warn('JSON API fail, fallback CSV:',e);
-    /* Fallback CSV */
-    const txt=await (await fetch(CSV_PROXY)).text();
-    const delim=txt.includes(';')&&txt.indexOf(';')<txt.indexOf(',')?';':',';
-    return Papa.parse(txt,{header:true,delimiter:delim,skipEmptyLines:true}).data;
+    console.error(e);
+    $msg.textContent='Lỗi tải dữ liệu';
+    alert('Không tải được dữ liệu: '+e);
   }
 }
 
-function load(){
-  msg.textContent='Đang tải…'; markers.clearLayers();
-  fetchData().then(render).catch(e=>alert('Không tải được dữ liệu: '+e));
-}
-
-function render(rows){
-  const shifts=[...new Set(rows.map(r=>r.ShiftCode).filter(Boolean))].sort();
-  if(!sel.options.length) sel.innerHTML='<option value="">— Tất cả ca —</option>'+shifts.map(s=>`<option>${s}</option>`).join('');
-  const cur=sel.value; let cnt=0;
-  rows.forEach(r=>{
-    if(cur && r.ShiftCode!==cur) return;
-    const lat=parseFloat(r.Lat),lon=parseFloat(r.Lon);
-    if(!lat||!lon) return;
-    L.marker([lat,lon]).bindPopup(`<b>${r.Email||''}</b><br>Ca: ${r.ShiftCode||''}<br>${r.Timestamp||''}`).addTo(markers);cnt++;
-  });
-  if(cnt) map.fitBounds(markers.getBounds().pad(.2));
-  msg.textContent=cnt?`Hiển thị ${cnt} điểm • ${new Date().toLocaleTimeString()}`:'Không có dữ liệu';
-}
+document.getElementById('btn').onclick = load;
+window.addEventListener('load',load);
 </script>
-</body></html>
+</body>
+</html>
