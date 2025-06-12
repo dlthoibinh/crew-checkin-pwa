@@ -2,100 +2,115 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Crew Check-In Dashboard</title>
+<title>Dashboard – Crew Check-In</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
 <style>
-  html,body{margin:0;height:100%}
-  #map{height:calc(100% - 48px)}
-  #bar{display:flex;align-items:center;gap:8px;padding:6px;border-bottom:1px solid #ddd;font:14px/1.4 sans-serif}
+  body,html{margin:0;padding:0;height:100%;font-family:sans-serif}
+  #toolbar{padding:6px 10px;background:#f7f7f7;display:flex;gap:8px;align-items:center;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  #map{height:calc(100% - 44px)}
   select,button{padding:4px 10px;font-size:14px}
-  .err{color:#c00;font-size:13px}
 </style>
 </head>
 <body>
 
-<div id="bar">
-  <label>Chọn ca:</label>
-  <select id="shift"></select>
-  <button id="btn">Refresh</button>
-  <span id="msg" class="err"></span>
+<div id="toolbar">
+  <label>Chọn ca:&nbsp;
+    <select id="shift"></select>
+  </label>
+  <button id="btnRefresh">Refresh</button>
+  <span id="note" style="color:#888;font-size:13px"></span>
 </div>
 
 <div id="map"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
+<!-- libs -->
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
 <script>
-/*----------------------------------------------------
-  1) LINK SHEET CSV – chỉ thay phần ***** bên dưới
-  --------------------------------------------------*/
-const ORIGIN_CSV =
- 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
+/* ============ CONFIG ============ */
+// URL CSV (đã Publish to web  →  .csv)
+const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQUumGlaLtMcTsv9ImwXLbNWrgFbPLUGuKV-tTa751FpjFqWs0ZlyEZ2iCdPTvLobG4Pqub5bewVSL5/pub?gid=963908913&single=true&output=csv';
 
-/* proxy CORS */
-const CSV_URL = 'https://r.jina.ai/http://'+ ORIGIN_CSV.replace(/^https?:\/\//,'');
+// Tự refresh mỗi … giây (0 = tắt)
+const AUTO_REFRESH_SEC = 60;
+/* ================================= */
 
-/*--------------------------------------------------*/
-const map  = L.map('map').setView([10.5,106], 8);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  {attribution:'© OpenStreetMap'}
-).addTo(map);
-
-const markers = L.layerGroup().addTo(map);
 const shiftSel = document.getElementById('shift');
-const msg      = document.getElementById('msg');
+const btnRefresh = document.getElementById('btnRefresh');
+const note = document.getElementById('note');
+let timer = null;
 
-/* tiện ích log + báo lỗi */
-const logErr = txt => { console.warn(txt); msg.textContent = txt; };
+// Khởi tạo map
+const map = L.map('map').setView([10.3, 105.6], 8);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap'
+}).addTo(map);
+const layer = L.layerGroup().addTo(map);
 
-async function fetchCSV(){
-  msg.textContent='Đang tải…';
-  const res = await fetch(CSV_URL,{mode:'cors'});
-  if(!res.ok) throw 'Fetch error: '+res.status;
-  return await res.text();
+btnRefresh.onclick = loadData;
+if (AUTO_REFRESH_SEC>0) setInterval(loadData, AUTO_REFRESH_SEC*1000);
+
+// loadData lần đầu khi DOM ready
+window.addEventListener('load', () => {
+  loadData();
+});
+
+//--------------------------
+function loadData(){
+  note.textContent='Đang tải…';
+  layer.clearLayers();
+  fetch(CSV_URL)
+    .then(r=>r.text())
+    .then(csvText=>{
+      // Xác định delimiter
+      const delim = (csvText.indexOf(';')!==-1 && csvText.indexOf(';') < csvText.indexOf(',')) ? ';' : ',';
+      Papa.parse(csvText,{
+        header:true,
+        skipEmptyLines:true,
+        delimiter:delim,
+        complete:res=>render(res.data),
+        error:err=>showError(err.message||err)
+      });
+    })
+    .catch(err=>showError('Failed to fetch'));
 }
 
-function buildShiftList(rows){
-  const set = new Set(rows.map(r=>r.ShiftCode).filter(Boolean));
-  shiftSel.innerHTML =
-    '<option value="">— Tất cả ca —</option>' +
-    [...set].sort().map(c=>`<option>${c}</option>`).join('');
-}
+function render(rows){
+  if(!rows.length){showError('Sheet rỗng');return;}
+  // ---- lấy danh sách ShiftCode duy nhất
+  const shifts = [...new Set(rows.map(r=>r.ShiftCode).filter(Boolean))].sort();
+  if(!shiftSel.options.length){          // fill lần đầu
+    shiftSel.innerHTML='<option value="">— Tất cả ca —</option>'+
+      shifts.map(s=>`<option>${s}</option>`).join('');
+  }
 
-function drawMarkers(rows){
-  markers.clearLayers();
-  const need = shiftSel.value;
+  const curShift = shiftSel.value;
+  let count=0;
   rows.forEach(r=>{
-    const lat = parseFloat(r.Lat), lon = parseFloat(r.Lon);
+    if(curShift && r.ShiftCode!==curShift) return;
+    const lat = parseFloat(r.Lat);
+    const lon = parseFloat(r.Lon);
     if(!lat||!lon) return;
-    if(need && r.ShiftCode!==need) return;
     L.marker([lat,lon])
-     .bindPopup(`<b>${r.Email||'n/a'}</b><br>Ca: ${r.ShiftCode||''}`)
-     .addTo(markers);
+      .bindPopup(`<b>${r.Email||'N/A'}</b><br>Ca: ${r.ShiftCode||''}<br>${r.Timestamp||''}`)
+      .addTo(layer);
+    count++;
   });
-  if(markers.getLayers().length) map.fitBounds(markers.getBounds().pad(0.2));
+  if(count){
+    map.fitBounds(layer.getBounds().pad(0.2));
+    note.textContent=`Hiển thị ${count} vị trí • cập nhật ${new Date().toLocaleTimeString()}`;
+  }else{
+    note.textContent='Không có bản ghi phù hợp';
+  }
 }
 
-async function loadData(){
-  try{
-    console.log('▶️ tải CSV', CSV_URL);
-    const csv = await fetchCSV();
-    Papa.parse(csv,{
-      header: true,
-      skipEmptyLines: true,
-      // 👉 nếu chưa biết chắc delimiter, để dynamic:
-      delimiter: (csv.indexOf(';') > csv.indexOf(',')) ? ';' : ',',
-      complete: res => {
-          ...
-      }
-    });
-  }catch(e){ logErr('Không tải được dữ liệu: '+e); }
+function showError(msg){
+  note.textContent='';
+  alert('Không tải được dữ liệu: '+msg);
 }
-
-document.getElementById('btn').onclick = loadData;
-/* load ngay lần đầu */
-loadData();
 </script>
 </body>
 </html>
