@@ -5,21 +5,21 @@ let isOnDuty = false, timerId = null;
 
 async function sendLocation(email, shift, lat, lon) {
   try {
-    console.log('→ Gửi toạ độ:', {email, shift, lat, lon});
-    // Chế độ no-cors để vượt CORS preflight
+    console.log('→ Gửi tọa độ:', {email, shift, lat, lon});
     await fetch(WEB_APP_URL, {
       mode: 'no-cors',
       method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      // không set headers để thành simple request
       body: JSON.stringify({email, shift, lat, lon})
     });
-    console.log('← Đã gửi (no-cors)');
+    console.log('← Đã gửi thành công (no-cors).');
     return {status:'OK'};
   } catch (err) {
     console.error('🚨 Fetch error:', err);
     return {status:'ERROR', message: err.message};
   }
 }
+
 
 document.getElementById('btn').onclick = async () => {
   const email = document.getElementById('email').value.trim();
