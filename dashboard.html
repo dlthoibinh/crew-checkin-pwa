@@ -2,39 +2,49 @@
 <html lang="vi">
 <head>
 <meta charset="utf-8">
-<title>Crew Check-in – Dashboard</title>
+<title>Crew Check-In – Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  html,body{margin:0;height:100%}
-  #bar{display:flex;gap:.6rem;align-items:center;padding:.4rem .6rem;
-       background:#fafafa;box-shadow:0 1px 3px rgba(0,0,0,.08);
-       font:15px system-ui,Arial}
-  #map{height:calc(100% - 46px)}
-  select,button{padding:.3rem .6rem;font-size:15px}
-  #msg{margin-left:auto;font-style:italic;color:#555}
+  html, body { margin:0; height:100% }
+  #bar {
+    display:flex; gap:0.5rem; align-items:center;
+    padding:0.5rem; background:#fafafa;
+    box-shadow:0 1px 3px rgba(0,0,0,0.1);
+    font:15px system-ui,Arial;
+  }
+  #map { height:calc(100% - 52px) }
+  select, button { padding:0.4rem 0.6rem; font-size:15px }
+  #msg { margin-left:auto; font-style:italic; color:#555 }
 
-  /* Tooltip style */
-  .leaflet-tooltip.permanent{
-    background:rgba(255,255,255,.85);
+  /* tooltip */
+  .leaflet-tooltip.permanent {
+    background:rgba(255,255,255,0.9);
     border:1px solid #3887BE;
     border-radius:4px;
     padding:2px 6px;
     font-size:13px;
-    color:#000;
-    box-shadow:0 1px 3px rgba(0,0,0,.2);
   }
 </style>
 </head>
 <body>
 
 <div id="bar">
-  <label>Chọn ca:&nbsp;</label>
+  <label>Đơn vị:</label>
+  <select id="unit">
+    <option value="">— Tất cả —</option>
+    <option>PC_TD</option>
+    <option>PC_TC</option>
+    <option>PC_TB</option>
+  </select>
+
+  <label>Ca:</label>
   <select id="shift">
-    <option value="">— Tất cả ca —</option>
+    <option value="">— Tất cả —</option>
     <option>CA01</option><option>CA02</option><option>CA03</option>
   </select>
+
   <button id="reload">Refresh</button>
   <span id="msg"></span>
 </div>
@@ -43,91 +53,81 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/*═════════════ CẤU HÌNH ═════════════*/
-const API_URL     = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-const AUTO_MS     = 60_000;    // tự reload mỗi 60 s
-const MAX_MINUTES = 0;        // chỉ lấy check-in trong 60 phút gần nhất (0 = bỏ lọc)
-const EMAIL_FIELD = 'email';   // tên trường email trong JSON trả về
-
-/*═════════════ KHỞI TẠO BẢN ĐỒ ═════════════*/
 window.addEventListener('load', () => {
-  const map = L.map('map').setView([9.5,106.4], 7);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-              {attribution:'© OpenStreetMap'}).addTo(map);
+  const API_URL   = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+  const AUTO_MS   = 60_000;
+  const $         = id => document.getElementById(id);
+  const msg       = t  => $('msg').textContent = t;
+
+  // setup map
+  const map     = L.map('map').setView([9.5,106.4],7);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap'
+  }).addTo(map);
   const markers = L.layerGroup().addTo(map);
 
-  const $   = id => document.getElementById(id);
-  const msg = t  => $('msg').textContent = t;
-
-  /* callback JSONP – toàn cục */
+  // JSONP callback
   window.updateCrew = data => {
     markers.clearLayers();
-    if (data.status !== 'OK'){
-      msg('API lỗi: ' + (data.message||'??')); return;
+    if (data.status !== 'OK') {
+      return msg('API lỗi: ' + (data.message||'?'));
     }
-
-    const sel = $('shift').value || null;
-    const latest = {};                 // email → bản ghi mới nhất
-    const now = Date.now();
+    const selUnit  = $('unit').value || null;
+    const selShift = $('shift').value || null;
+    const latest   = {};     // emp → record
+    const now      = Date.now();
 
     data.rows.forEach(r => {
-      /* 1. Lọc theo ca (nếu chọn) */
-      if (sel && r.shift !== sel) return;
-
-      /* 2. Lọc theo thời gian gần nhất */
-      if (MAX_MINUTES){
-        const ts = new Date(r.timestamp || r.Timestamp).getTime();
-        if (!ts || (now - ts) > MAX_MINUTES*60*1000) return;
-        r._ts = ts;                     // cache
+      // r: {timestamp, unit, emp, shift, lat, lon}
+      if (selUnit  && r.unit  !== selUnit)  return;
+      if (selShift && r.shift !== selShift) return;
+      const ts = new Date(r.timestamp).getTime();
+      if (!latest[r.emp] || ts > latest[r.emp]._ts) {
+        latest[r.emp] = Object.assign({_ts:ts}, r);
       }
-
-      /* 3. Giữ bản ghi mới nhất của mỗi email */
-      const key = r[EMAIL_FIELD];
-      if (!latest[key] || (r._ts && r._ts > latest[key]._ts))
-        latest[key] = r;
     });
 
     const pts = [];
-    Object.values(latest).forEach(r=>{
-      const la = +r.lat, lo = +r.lon;
-      if (!Number.isFinite(la)||!Number.isFinite(lo)) return;
-
+    Object.values(latest).forEach(r => {
+      const la = parseFloat(r.lat), lo = parseFloat(r.lon);
+      if (!isFinite(la) || !isFinite(lo)) return;
       L.marker([la, lo])
         .bindTooltip(
-          `<b>${r.email}</b><br>Ca: ${r.shift}`,
-          {permanent:true, direction:'top', offset:[0,-10], opacity:0.9}
+          `<b>${r.emp}</b><br>Đơn vị: ${r.unit}<br>Ca: ${r.shift}`,
+          { permanent:true, direction:'top', offset:[0,-10] }
         )
         .addTo(markers);
       pts.push([la, lo]);
     });
 
-    if (pts.length){
-      map.fitBounds(pts,{padding:[30,30]});
+    if (pts.length) {
+      map.fitBounds(pts, { padding:[20,20] });
       msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
-    }else{
-      msg('Không có dữ liệu phù hợp');
+    } else {
+      msg('Không có dữ liệu');
     }
   };
 
-  /* Hàm nạp JSONP */
+  // load via JSONP
   function load(){
-    msg('Đang tải dữ liệu…');
-    /* xoá script JSONP cũ (nếu có) */
+    msg('Đang tải…');
     document.querySelectorAll('script[data-jsonp]').forEach(s=>s.remove());
-
-    const s = document.createElement('script');
-    s.src = API_URL
-           + '?list=1'
-           + '&shift=' + encodeURIComponent($('shift').value||'')
-           + '&callback=updateCrew&t=' + Date.now();
-    s.dataset.jsonp = '1';
-    document.body.appendChild(s);
+    const scr = document.createElement('script');
+    const cb  = 'updateCrew';
+    scr.src     = API_URL
+                + '?t=' + Date.now()
+                + '&callback=' + cb;
+    scr.dataset.jsonp = '1';
+    document.body.appendChild(scr);
   }
 
-  $('reload').onclick = load;
-  $('shift').onchange = load;
-  load();                      // lần đầu
-  setInterval(load, AUTO_MS);  // tự làm mới
+  // events
+  $('reload').onclick  = load;
+  $('unit').onchange   = load;
+  $('shift').onchange  = load;
+
+  load();
+  setInterval(load, AUTO_MS);
 });
 </script>
 </body>
