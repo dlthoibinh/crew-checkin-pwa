@@ -7,18 +7,16 @@
 <link rel="stylesheet"
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
-  html,body { margin:0; height:100% }
-  #bar {
-    display:flex; align-items:center; gap:0.6rem;
-    padding:0.5rem; background:#fafafa;
-    box-shadow:0 1px 3px rgba(0,0,0,0.1);
-    font:15px system-ui,Arial;
-  }
-  #map { height:calc(100% - 52px) }
-  select, button { padding:0.4rem 0.6rem; font-size:15px }
-  #msg { margin-left:auto; font-style:italic; color:#555 }
-  .leaflet-tooltip.permanent {
-    background:rgba(255,255,255,0.9);
+  html,body{margin:0;height:100%}
+  #bar{display:flex;align-items:center;gap:.6rem;
+       padding:.5rem;background:#fafafa;
+       box-shadow:0 1px 3px rgba(0,0,0,.1);
+       font:15px system-ui,Arial}
+  #map{height:calc(100% - 52px)}
+  select,button{padding:.4rem .6rem;font-size:15px}
+  #msg{margin-left:auto;font-style:italic;color:#555}
+  .leaflet-tooltip.permanent{
+    background:rgba(255,255,255,.9);
     border:1px solid #3887BE;
     border-radius:4px;
     padding:2px 6px;
@@ -40,7 +38,9 @@
   <label>Ca:</label>
   <select id="shift">
     <option value="">— Tất cả —</option>
-    <option>CA01</option><option>CA02</option><option>CA03</option>
+    <option>CA01</option>
+    <option>CA02</option>
+    <option>CA03</option>
   </select>
 
   <button id="reload">Refresh</button>
@@ -51,81 +51,61 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-window.addEventListener('load', () => {
-  const API_URL   = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec'; // thay bằng URL của anh
-  const AUTO_MS   = 60_000;
-  const $         = id => document.getElementById(id);
-  const msg       = t  => $('msg').textContent = t;
+window.addEventListener('load', ()=>{
+  const API = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec'; // URL mới
+  const REFRESH_MS = 60000;
+  const $ = id=>document.getElementById(id), msg=t=>$('msg').textContent=t;
 
-  // Khởi tạo map
-  const map     = L.map('map').setView([9.5,106.4],7);
+  // setup map
+  const map = L.map('map').setView([9.5,106.4],7);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OpenStreetMap'
   }).addTo(map);
   const markers = L.layerGroup().addTo(map);
 
-  // JSONP callback
-  window.updateCrew = data => {
+  window.updateCrew = data=>{
     markers.clearLayers();
-    if (data.status !== 'OK') {
-      return msg('API lỗi: ' + (data.message||'?'));
-    }
-    const selUnit  = $('unit').value || null;
-    const selShift = $('shift').value || null;
-    const latest   = {};
-    const now      = Date.now();
-
-    data.rows.forEach(r => {
-      // r = {timestamp, unit, emp, shift, lat, lon}
-      if (selUnit  && r.unit  !== selUnit)  return;
-      if (selShift && r.shift !== selShift) return;
-      const ts = new Date(r.timestamp).getTime();
-      if (!latest[r.emp] || ts > latest[r.emp]._ts) {
-        latest[r.emp] = Object.assign({_ts:ts}, r);
-      }
+    if(data.status!=='OK') return msg('API lỗi: '+(data.message||'?'));
+    const selU = $('unit').value||null;
+    const selS = $('shift').value||null;
+    const latest={};
+    data.rows.forEach(r=>{
+      if(selU&&r.unit!==selU) return;
+      if(selS&&r.shift!==selS) return;
+      const t = new Date(r.timestamp).getTime();
+      if(!latest[r.emp]||t>latest[r.emp]._ts)
+        latest[r.emp]=Object.assign({_ts:t},r);
     });
-
-    const pts = [];
-    Object.values(latest).forEach(r => {
-      const la = parseFloat(r.lat), lo = parseFloat(r.lon);
-      if (!isFinite(la) || !isFinite(lo)) return;
-      L.marker([la, lo])
-        .bindTooltip(
-          `<b>${r.emp}</b><br>Đơn vị: ${r.unit}<br>Ca: ${r.shift}`,
-          { permanent:true, direction:'top', offset:[0,-10] }
-        )
-        .addTo(markers);
-      pts.push([la, lo]);
+    const pts=[];
+    Object.values(latest).forEach(r=>{
+      const la=+r.lat, lo=+r.lon;
+      if(!isFinite(la)||!isFinite(lo)) return;
+      L.marker([la,lo])
+       .bindTooltip(`<b>${r.emp}</b><br>ĐV: ${r.unit}<br>Ca: ${r.shift}`,
+         {permanent:true,direction:'top',offset:[0,-10]})
+       .addTo(markers);
+      pts.push([la,lo]);
     });
-
-    if (pts.length) {
-      map.fitBounds(pts, { padding:[20,20] });
+    if(pts.length){
+      map.fitBounds(pts,{padding:[20,20]});
       msg(`Hiển thị ${pts.length} vị trí • ${new Date().toLocaleTimeString()}`);
-    } else {
-      msg('Không có dữ liệu');
-    }
+    } else msg('Không có dữ liệu');
   };
 
-  // Hàm load dữ liệu qua JSONP
   function load(){
     msg('Đang tải…');
     document.querySelectorAll('script[data-jsonp]').forEach(s=>s.remove());
-    const scr = document.createElement('script');
-    scr.dataset.jsonp = '1';
-    scr.src = API_URL
-            + '?list=all'
-            + '&callback=updateCrew'
-            + '&t=' + Date.now();
-    document.body.appendChild(scr);
+    const s=document.createElement('script');
+    s.dataset.jsonp='1';
+    s.src=API+'?list=all'+'&callback=updateCrew'+'&t='+Date.now();
+    document.body.appendChild(s);
   }
 
-  // Sự kiện UI
-  $('reload').onclick  = load;
-  $('unit').onchange   = load;
-  $('shift').onchange  = load;
-
+  $('reload').onclick=load;
+  $('unit').onchange=load;
+  $('shift').onchange=load;
   load();
-  setInterval(load, AUTO_MS);
+  setInterval(load,REFRESH_MS);
 });
 </script>
 </body>
