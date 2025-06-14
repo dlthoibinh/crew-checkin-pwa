@@ -1,51 +1,134 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Check-In Ca Trực EVN</title>
-  <link rel="manifest" href="manifest.json"/>
-  <link rel="icon" href="evn_logo.png"/>
+  <meta charset="utf-8">
+  <title>Check-In Ca Trực</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <link rel="manifest" href="manifest.json">
   <style>
-    body{font:16px Arial;text-align:center;padding:1rem;background:#f5f5f5}
-    #app{display:none;margin-top:1rem}
-    button,select{padding:.5rem;font-size:1rem;margin:.5rem}
-    #status{margin-top:1rem;font-weight:bold}
-    a{color:#0078D7;text-decoration:none}
-    /* Terms modal */
-    #termsModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);}
-    #termsModal .content{background:#fff;margin:10% auto;padding:1rem;width:90%;max-width:400px;border-radius:4px;}
-    #termsModal .close{float:right;cursor:pointer;font-size:1.2rem;}
+    body{font-family:sans-serif;padding:1rem}
+    button, select{width:100%;padding:.5rem;font-size:1rem;margin:0.5rem 0}
+    #status{margin:1rem 0;color:#d00}
   </style>
 </head>
 <body>
-  <img src="evn_logo.png" alt="EVN Logo" width="80"/>
-  <h1>Check-In Ca Trực EVN</h1>
-
-  <button id="btnLogin">Đăng nhập Google</button>
-
-  <div id="app">
-    <p>Xin chào, <strong id="userEmail"></strong></p>
-    <select id="shift">
-      <option value="">— Chọn ca trực —</option>
-      <option value="CA01">CA01</option>
-      <option value="CA02">CA02</option>
-      <option value="CA03">CA03</option>
-    </select><br/>
-    <button id="btnStart" disabled>Bắt đầu ca</button>
-    <p id="status">Đã dừng</p>
+  <h1>Check-In Ca Trực</h1>
+  <div id="userBlock">
+    <button id="loginBtn">Đăng nhập với Google</button>
   </div>
 
-  <div id="termsModal">
-    <div class="content">
-      <span class="close" id="closeTerms">&times;</span>
-      <h2>Điều khoản & Chính sách</h2>
-      <p>&copy;2025 EVN SPC. Ứng dụng nội bộ. Nghiêm cấm sử dụng trái phép.</p>
-      <p>Đăng nhập và check-in tức là bạn đã đồng ý với các điều khoản bảo mật và sử dụng.</p>
-    </div>
-  </div>
-  <p><a href="#" id="showTerms">Điều khoản & Chính sách</a></p>
+  <select id="unitSel"><option value="">— Đơn vị —</option></select>
+  <select id="empSel"><option value="">— Nhân viên —</option></select>
+  <select id="shiftSel">
+    <option value="">— Ca trực —</option>
+    <option>CA01</option><option>CA02</option><option>CA03</option>
+  </select>
 
-  <script type="module" src="main.js"></script>
+  <button id="startBtn">Bắt đầu ca</button>
+  <button id="stopBtn" disabled>Đã dừng</button>
+  <div id="status"></div>
+
+  <footer style="font-size:.8rem;text-align:center;margin-top:2rem">
+    ©2025 EVN SPC — <a href="terms.html" target="_blank">Điều khoản & Chính sách</a>
+  </footer>
+
+  <script type="module">
+    import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+
+    const API = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+    let userEmail='', watchId=null;
+
+    document.addEventListener('DOMContentLoaded', init);
+
+    async function init(){
+      // 1) Khởi GoogleAuth
+      await GoogleAuth.init({
+        clientId: '280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com',
+        scopes: ['profile','email'],
+        redirectUrl: window.location.origin + '/oauth2redirect/google'
+      });
+
+      // 2) Gắn event
+      byId('loginBtn').onclick = onLogin;
+      byId('unitSel').onchange = loadEmps;
+      byId('startBtn').onclick = startShift;
+      byId('stopBtn').onclick  = stopShift;
+
+      // 3) load units
+      const uRes = await fetch(`${API}?list=units`).then(r=>r.json());
+      if(uRes.status==='OK'){
+        uRes.units.forEach(u=>{
+          byId('unitSel').insertAdjacentHTML('beforeend',
+            `<option value="${u.code}">${u.code} – ${u.name}</option>`);
+        });
+      }
+    }
+
+    async function onLogin(){
+      try {
+        const usr = await GoogleAuth.signIn();
+        userEmail = usr.email;
+        byId('userBlock').innerHTML = `<p>Xin chào, ${userEmail}</p>`;
+      } catch(e){
+        setStatus('Lỗi đăng nhập: '+e, true);
+      }
+    }
+
+    async function loadEmps(){
+      const unit = byId('unitSel').value;
+      byId('empSel').innerHTML = `<option value="">— Nhân viên —</option>`;
+      if (!unit) return;
+      const r = await fetch(`${API}?list=emps&unit=${unit}`).then(r=>r.json());
+      if (r.status==='OK'){
+        r.emps.forEach(e=>{
+          byId('empSel').insertAdjacentHTML('beforeend',
+            `<option value="${e.code}">${e.code} – ${e.name}</option>`);
+        });
+      }
+    }
+
+    function startShift(){
+      if (watchId) return;
+      const unit    = byId('unitSel').value;
+      const empCode = byId('empSel').value;
+      const shift   = byId('shiftSel').value;
+      if (!userEmail || !unit||!empCode||!shift){
+        return setStatus('Vui lòng đăng nhập và chọn đủ thông tin', true);
+      }
+      watchId = navigator.geolocation.watchPosition(pos=>{
+        const { latitude:lat, longitude:lon } = pos.coords;
+        fetch(API, {
+          method:'POST',
+          body: JSON.stringify({ unit, empCode, shift, lat, lon })
+        }).then(r=>r.json())
+          .then(j=> {
+            if (j.status!=='OK')
+              setStatus('Upload lỗi: '+j.message, true);
+          });
+      }, err=>{
+        setStatus('GPS lỗi: '+err.message, true);
+      },{ enableHighAccuracy:true, maximumAge:0, timeout:10000 });
+
+      byId('startBtn').disabled = true;
+      byId('stopBtn').disabled  = false;
+      setStatus('Đang gửi vị trí…');
+    }
+
+    function stopShift(){
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      byId('startBtn').disabled = false;
+      byId('stopBtn').disabled  = true;
+      setStatus('Đã dừng');
+    }
+
+    function setStatus(t, isErr=false){
+      const s = byId('status');
+      s.textContent = t;
+      s.style.color   = isErr ? 'red' : 'black';
+    }
+
+    function byId(id){ return document.getElementById(id); }
+  </script>
 </body>
 </html>
