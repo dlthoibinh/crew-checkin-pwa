@@ -4,24 +4,26 @@
   <meta charset="utf-8">
   <title>Check-In Ca Trực</title>
   <meta name="viewport" content="width=device-width,initial-scale=1">
+
   <style>
     body{font-family:sans-serif;padding:1rem}
     button, select{width:100%;padding:.5rem;font-size:1rem;margin:0.5rem 0}
     #status{margin:1rem 0;color:#d00}
   </style>
 
-  <!-- Google Identity Services (chỉ load trên web) -->
+  <!-- Google Identity Services (web) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Capacitor runtime (native) -->
+  <script src="capacitor.js"></script>
 </head>
 <body>
   <h1>Check-In Ca Trực</h1>
 
-  <!-- khu vực Login -->
   <div id="userBlock">
+    <!-- Trên web, GSI sẽ render vào đây; trên native, ta đổi text của nút này -->
     <button id="loginBtn">Đăng nhập với Google</button>
   </div>
 
-  <!-- Chọn Đơn vị / Nhân viên / Ca -->
   <select id="unitSel"><option value="">— Đơn vị —</option></select>
   <select id="empSel"><option value="">— Nhân viên —</option></select>
   <select id="shiftSel">
@@ -29,130 +31,150 @@
     <option>CA01</option><option>CA02</option><option>CA03</option>
   </select>
 
-  <!-- Bắt đầu / Dừng -->
   <button id="startBtn">Bắt đầu ca</button>
   <button id="stopBtn" disabled>Đã dừng</button>
   <div id="status"></div>
 
-  <script type="module">
-  import { Capacitor } from '@capacitor/core';
-  import { GoogleAuth } from '@codetrix-studio/capacitor-google-auth';
+  <script>
+  (function(){
+    const API = 
+      'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+    let userEmail = '', watchId = null;
 
-  const API = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-  let userEmail = '', watchId = null;
+    const unitSel   = document.getElementById('unitSel');
+    const empSel    = document.getElementById('empSel');
+    const shiftSel  = document.getElementById('shiftSel');
+    const loginBtn  = document.getElementById('loginBtn');
+    const startBtn  = document.getElementById('startBtn');
+    const stopBtn   = document.getElementById('stopBtn');
+    const statusDiv = document.getElementById('status');
+    const userBlock = document.getElementById('userBlock');
 
-  document.addEventListener('DOMContentLoaded', async () => {
-    // 1) Load danh sách Đơn vị
-    const uRes = await fetch(`${API}?list=units`).then(r=>r.json());
-    if (uRes.status==='OK') {
-      uRes.units.forEach(u=>{
-        unitSel.insertAdjacentHTML('beforeend',
-          `<option value="${u.code}">${u.code} – ${u.name}</option>`);
-      });
+    document.addEventListener('DOMContentLoaded', init);
+
+    async function init(){
+      // 1) Load Đơn vị
+      try {
+        const uRes = await fetch(API+'?list=units').then(r=>r.json());
+        if(uRes.status==='OK'){
+          uRes.units.forEach(u=>{
+            unitSel.insertAdjacentHTML('beforeend',
+              `<option value="${u.code}">${u.code} – ${u.name}</option>`);
+          });
+        }
+      }catch(e){ console.error(e); }
+
+      // 2) Thiết lập login tuỳ nền tảng
+      if (window.Capacitor && Capacitor.isNativePlatform()) {
+        // native
+        loginBtn.textContent = 'Đăng nhập (native)';
+        loginBtn.onclick = nativeLogin;
+      } else {
+        // web
+        window.onloadGSI = () => {
+          google.accounts.id.initialize({
+            client_id: '280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com',
+            callback: webCredentialResponse
+          });
+          google.accounts.id.renderButton(
+            loginBtn,
+            { theme:'outline', size:'large', text:'signin_with' }
+          );
+        };
+      }
+
+      unitSel.onchange  = loadEmps;
+      startBtn.onclick  = startShift;
+      stopBtn.onclick   = stopShift;
     }
 
-    // 2) Thiết lập GoogleAuth native nếu chạy trên app
-    if (Capacitor.isNativePlatform()) {
-      await GoogleAuth.init({
-        clientId: '280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com',
-        scopes: ['profile','email']
-      });
-      loginBtn.onclick = onNativeLogin;
-    } else {
-      // 3) Thiết lập Google Identity Services web
-      window.onloadGSI = () => {
-        google.accounts.id.initialize({
-          client_id: '280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com',
-          callback: onWebCredential
+    // native login
+    async function nativeLogin(){
+      try {
+        const { GoogleAuth } = Capacitor.Plugins;
+        await GoogleAuth.init({
+          clientId: '280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com',
+          scopes: ['profile','email']
         });
-        google.accounts.id.renderButton(loginBtn, {
-          theme: 'outline', size: 'large', text: 'signin_with'
-        });
-      };
-      // wait GSI lib
-      window.onloadGSI();
-    }
-
-    unitSel.onchange = loadEmps;
-    startBtn.onclick  = startShift;
-    stopBtn.onclick   = stopShift;
-  });
-
-  // native
-  async function onNativeLogin(){
-    try {
-      const usr = await GoogleAuth.signIn();
-      userEmail = usr.email;
-      userBlock.innerHTML = `<p>Xin chào, ${userEmail}</p>`;
-    } catch(e){
-      setStatus('Lỗi login native: '+e, true);
-    }
-  }
-
-  // web
-  function onWebCredential(response){
-    const jwt = response.credential;
-    // gọi API Google để decode token lên lấy email
-    fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${jwt}`)
-      .then(r=>r.json())
-      .then(u=>{
-        userEmail = u.email;
+        const user = await GoogleAuth.signIn();
+        userEmail = user.email;
         userBlock.innerHTML = `<p>Xin chào, ${userEmail}</p>`;
-      })
-      .catch(e=> setStatus('Lỗi login web: '+e, true));
-  }
-
-  async function loadEmps(){
-    empSel.innerHTML = `<option value="">— Nhân viên —</option>`;
-    if (!unitSel.value) return;
-    const r = await fetch(`${API}?list=emps&unit=${unitSel.value}`).then(r=>r.json());
-    if (r.status==='OK') {
-      r.emps.forEach(e=>{
-        empSel.insertAdjacentHTML('beforeend',
-          `<option value="${e.code}">${e.code} – ${e.name}</option>`);
-      });
+      } catch(e){
+        setStatus('Lỗi đăng nhập native: '+e, true);
+      }
     }
-  }
 
-  function startShift(){
-    if (watchId) return;
-    if (!userEmail || !unitSel.value || !empSel.value || !shiftSel.value)
-      return setStatus('Vui lòng đăng nhập và chọn đầy đủ', true);
-
-    watchId = navigator.geolocation.watchPosition(pos=>{
-      const { latitude:lat, longitude:lon } = pos.coords;
-      fetch(API, {
-        method:'POST',
-        body: JSON.stringify({
-          unit:unitSel.value,
-          empCode:empSel.value,
-          shift:shiftSel.value,
-          lat, lon
+    // web callback
+    function webCredentialResponse(resp){
+      const idToken = resp.credential;
+      fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=${idToken}`)
+        .then(r=>r.json())
+        .then(u=>{
+          userEmail = u.email;
+          userBlock.innerHTML = `<p>Xin chào, ${userEmail}</p>`;
         })
-      }).then(r=>r.json()).then(j=>{
-        if (j.status!=='OK') setStatus('Upload lỗi: '+j.message, true);
-      });
-    }, err=>{
-      setStatus('GPS lỗi: '+err.message, true);
-    }, { enableHighAccuracy:true, timeout:10000 });
+        .catch(e=> setStatus('Lỗi đăng nhập web: '+e, true));
+    }
 
-    startBtn.disabled = true;
-    stopBtn.disabled  = false;
-    setStatus('Đang gửi vị trí…');
-  }
+    // load Nhân viên
+    async function loadEmps(){
+      empSel.innerHTML = `<option value="">— Nhân viên —</option>`;
+      if (!unitSel.value) return;
+      try {
+        const r = await fetch(API+`?list=emps&unit=${unitSel.value}`)
+                        .then(r=>r.json());
+        if (r.status==='OK'){
+          r.emps.forEach(e=>{
+            empSel.insertAdjacentHTML('beforeend',
+              `<option value="${e.code}">${e.code} – ${e.name}</option>`);
+          });
+        }
+      }catch(e){ console.error(e); }
+    }
 
-  function stopShift(){
-    if (watchId) navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-    startBtn.disabled = false;
-    stopBtn.disabled  = true;
-    setStatus('Đã dừng');
-  }
+    // start watch
+    function startShift(){
+      if (watchId) return;
+      if (!userEmail || !unitSel.value || !empSel.value || !shiftSel.value) {
+        return setStatus('Vui lòng đăng nhập và chọn đầy đủ', true);
+      }
+      watchId = navigator.geolocation.watchPosition(pos=>{
+        const { latitude:lat, longitude:lon } = pos.coords;
+        fetch(API, {
+          method:'POST',
+          body: JSON.stringify({
+            unit:unitSel.value,
+            empCode:empSel.value,
+            shift:shiftSel.value,
+            lat, lon
+          })
+        }).then(r=>r.json())
+          .then(j=>{
+            if (j.status!=='OK') setStatus('Upload lỗi: '+j.message, true);
+          });
+      }, err=>{
+        setStatus('GPS lỗi: '+err.message, true);
+      },{ enableHighAccuracy:true, timeout:10000 });
 
-  function setStatus(t, err=false){
-    status.textContent = t;
-    status.style.color = err?'red':'black';
-  }
+      startBtn.disabled = true;
+      stopBtn.disabled  = false;
+      setStatus('Đang gửi vị trí…');
+    }
+
+    // stop watch
+    function stopShift(){
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+      watchId = null;
+      startBtn.disabled = false;
+      stopBtn.disabled  = true;
+      setStatus('Đã dừng');
+    }
+
+    function setStatus(txt, isErr=false){
+      statusDiv.textContent = txt;
+      statusDiv.style.color = isErr?'red':'black';
+    }
+  })();
   </script>
 </body>
 </html>
