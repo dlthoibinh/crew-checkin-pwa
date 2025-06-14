@@ -1,78 +1,73 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Dashboard Check-In EVN</title>
+  <meta charset="utf-8">
+  <title>Dashboard – Crew Check-In</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
   <style>
     body,html{margin:0;padding:0;height:100%}
-    #controls{padding:8px;background:#fafafa;display:flex;gap:8px;align-items:center}
-    #map{height:calc(100% - 48px)}
-    select,input,button{padding:4px;font-size:1rem}
+    #controls{padding:8px;background:#fff;position:absolute;top:0;left:0;z-index:1000}
+    #map{width:100%;height:100%}
+    select,button{margin-right:5px;padding:4px}
   </style>
 </head>
 <body>
   <div id="controls">
-    <select id="unit"><option value="">— Đơn vị —</option></select>
-    <select id="shift"><option value="">— Ca —</option><option>CA01</option><option>CA02</option><option>CA03</option></select>
-    <input list="emps" id="empSearch" placeholder="Tìm nhân viên…"/>
-    <datalist id="emps"></datalist>
-    <button id="load">Xem</button>
+    <select id="unitF"><option value="">— Đơn vị —</option></select>
+    <select id="shiftF">
+      <option value="">— Ca trực —</option>
+      <option>CA01</option><option>CA02</option><option>CA03</option>
+    </select>
+    <button id="goBtn">Xem</button>
+    <span id="msg"></span>
   </div>
   <div id="map"></div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
-    const APP = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-    const $ = id=>document.getElementById(id);
-    const map = L.map('map').setView([15.8,106],6);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OSM'}).addTo(map);
-    let markers=L.layerGroup().addTo(map), info=L.popup();
+    const API  = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+    const map  = L.map('map').setView([10.0,106.6], 8);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'©OpenStreetMap'}).addTo(map);
+    const markers = L.layerGroup().addTo(map);
 
-    async function getJSON(params){
-      const url=APP+'?'+new URLSearchParams(params);
-      const r=await fetch(url); return r.json();
-    }
-
-    // load units
-    getJSON({listUnits:1}).then(r=>{
-      r.units.forEach(u=>$.unit.add(new Option(u.DienLuc,u.Ma_Dovi)));
+    document.addEventListener('DOMContentLoaded', async()=>{
+      // load đơn vị vào filter
+      const u = await fetch(`${API}?list=units`).then(r=>r.json());
+      if (u.status==='OK'){
+        u.units.forEach(d=>{
+          unitF.insertAdjacentHTML('beforeend',
+            `<option value="${d.code}">${d.code}</option>`);
+        });
+      }
+      document.getElementById('goBtn').onclick = draw;
+      await draw();
     });
 
-    // on unit change load employees
-    $.unit.onchange = ()=>{
-      $.emps.innerHTML='';
-      $.empSearch.value='';
-      const u=$.unit.value;
-      if(!u) return;
-      getJSON({listEmployees:u}).then(r=>{
-        r.employees.forEach(e=>{
-          const opt=document.createElement('option');
-          opt.value=e.Ten_NV;
-          opt.label=e.Ma_NV;
-          $.emps.appendChild(opt);
-        });
-      });
-    };
-
-    // load logs
-    $.load.onclick = async ()=>{
+    async function draw(){
+      msg('Đang tải…');
       markers.clearLayers();
-      const unit=$.unit.value, shift=$.shift.value, emp=$.empSearch.value;
-      const r=await getJSON({getLogs:1,unit,shift});
-      if(r.status!=='OK'){ alert(r.message||'Lỗi'); return; }
-      const pts=[];
-      r.logs.forEach(l=>{
-        if(emp && l.name!==emp) return;
-        const m=L.marker([l.lat,l.lon]).addTo(markers);
-        m.bindPopup(`<b>${l.name}</b><br>Đơn vị: ${l.unit}<br>Ca: ${l.shift}`);
-        pts.push([l.lat,l.lon]);
+      const unit  = unitF.value;
+      const shift = shiftF.value;
+      const q = `?list=logs&shift=${encodeURIComponent(shift)}`;
+      const data = await fetch(API+q).then(r=>r.json());
+      if (data.status!=='OK') return msg('Lỗi: '+data.message);
+      let cnt=0, pts=[];
+      data.rows.forEach(r=>{
+        if (unit && r.unit!==unit) return;
+        const la=+r.lat, lo=+r.lon;
+        if (!isFinite(la)||!isFinite(lo)) return;
+        L.marker([la,lo])
+         .bindPopup(`${r.empCode}<br>ĐV: ${r.unit}<br>Ca: ${r.shift}`)
+         .addTo(markers);
+        pts.push([la,lo]);
+        cnt++;
       });
-      if(pts.length){
-        map.fitBounds(pts,{padding:[30,30]});
-      }
-    };
+      if (pts.length) map.fitBounds(pts,{padding:[20,20]});
+      msg(`Hiển thị ${cnt} điểm`);
+    }
+
+    function msg(t){ document.getElementById('msg').textContent = t }
   </script>
 </body>
 </html>
