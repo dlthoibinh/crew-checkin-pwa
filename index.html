@@ -1,140 +1,51 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Check-In Ca Trực</title>
-  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Check-In Ca Trực EVN</title>
+  <link rel="manifest" href="manifest.json"/>
+  <link rel="icon" href="evn_logo.png"/>
   <style>
-    body{font:16px Arial;padding:1rem;background:#f5f5f5}
-    .hidden{display:none}
-    label{display:block;margin:.5rem 0 .2rem}
-    select,button{width:100%;padding:.6rem;font-size:1rem;margin:.4rem 0;box-sizing:border-box}
-    button{background:#0078D7;color:#fff;border:none;border-radius:4px;cursor:pointer}
-    button:disabled{background:#aaa;cursor:default}
-    #status{font-weight:bold;text-align:center;height:1.2rem}
-    footer{margin-top:2rem;font-size:0.8rem;color:#555;text-align:center}
-    footer a{color:#0078D7;text-decoration:none}
+    body{font:16px Arial;text-align:center;padding:1rem;background:#f5f5f5}
+    #app{display:none;margin-top:1rem}
+    button,select{padding:.5rem;font-size:1rem;margin:.5rem}
+    #status{margin-top:1rem;font-weight:bold}
+    a{color:#0078D7;text-decoration:none}
+    /* Terms modal */
+    #termsModal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);}
+    #termsModal .content{background:#fff;margin:10% auto;padding:1rem;width:90%;max-width:400px;border-radius:4px;}
+    #termsModal .close{float:right;cursor:pointer;font-size:1.2rem;}
   </style>
 </head>
 <body>
-  <h1 style="text-align:center">Check-In Ca Trực</h1>
+  <img src="evn_logo.png" alt="EVN Logo" width="80"/>
+  <h1>Check-In Ca Trực EVN</h1>
 
-  <!-- Sign in -->
-  <div id="gsiBtn"></div>
+  <button id="btnLogin">Đăng nhập Google</button>
 
-  <!-- Main form -->
-  <div id="mainForm" class="hidden">
-    <div>Xin chào, <span id="userEmail"></span></div>
-
-    <label>Ca trực
-      <select id="caSelect">
-        <option value="">— Chọn ca trực —</option>
-        <option value="CA01">CA01</option>
-        <option value="CA02">CA02</option>
-        <option value="CA03">CA03</option>
-      </select>
-    </label>
-
-    <button id="btnCheck" disabled>Bắt đầu ca</button>
-    <div id="status"></div>
+  <div id="app">
+    <p>Xin chào, <strong id="userEmail"></strong></p>
+    <select id="shift">
+      <option value="">— Chọn ca trực —</option>
+      <option value="CA01">CA01</option>
+      <option value="CA02">CA02</option>
+      <option value="CA03">CA03</option>
+    </select><br/>
+    <button id="btnStart" disabled>Bắt đầu ca</button>
+    <p id="status">Đã dừng</p>
   </div>
 
-  <footer>
-    &copy; 2025 EVN SPC. <a href="terms.html" target="_blank">Điều khoản & Chính sách</a>
-  </footer>
+  <div id="termsModal">
+    <div class="content">
+      <span class="close" id="closeTerms">&times;</span>
+      <h2>Điều khoản & Chính sách</h2>
+      <p>&copy;2025 EVN SPC. Ứng dụng nội bộ. Nghiêm cấm sử dụng trái phép.</p>
+      <p>Đăng nhập và check-in tức là bạn đã đồng ý với các điều khoản bảo mật và sử dụng.</p>
+    </div>
+  </div>
+  <p><a href="#" id="showTerms">Điều khoản & Chính sách</a></p>
 
-  <script>
-  const CLIENT_ID  = '280769604046-7orcjmdsjrrtu4j69r4mv9prjqfh1b81.apps.googleusercontent.com';
-  const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-
-  let idToken = null, tracking=false, timerId=null, unchanged=0, prevCoord='';
-
-  // Initialize Google Sign-In
-  window.onload = () => {
-    google.accounts.id.initialize({
-      client_id: CLIENT_ID,
-      callback: handleCredentialResponse
-    });
-    google.accounts.id.renderButton(
-      document.getElementById('gsiBtn'),
-      { theme:'outline', size:'large', text:'signin_with' }
-    );
-    google.accounts.id.prompt();
-  };
-
-  function handleCredentialResponse(resp){
-    idToken = resp.credential;
-    const payload = JSON.parse(atob(idToken.split('.')[1]));
-    document.getElementById('userEmail').textContent = payload.email;
-    document.getElementById('gsiBtn').classList.add('hidden');
-    document.getElementById('mainForm').classList.remove('hidden');
-  }
-
-  // JSONP helper
-  function jsonp(url, cb){
-    const fn = '_cb'+Date.now();
-    window[fn] = data => { delete window[fn]; cb(data); };
-    const s = document.createElement('script');
-    s.src = url + (url.includes('?')?'&':'?') + 'callback='+fn;
-    document.body.appendChild(s);
-  }
-
-  const caSel = document.getElementById('caSelect');
-  const btn   = document.getElementById('btnCheck');
-  const st    = document.getElementById('status');
-
-  caSel.onchange = () => {
-    btn.disabled = !caSel.value;
-  };
-
-  btn.onclick = () => {
-    if (!tracking){
-      startCheck();
-    } else {
-      stopCheck();
-    }
-  };
-
-  function startCheck(){
-    tracking = true;
-    btn.textContent = 'Kết thúc ca';
-    caSel.disabled = true;
-    sendLoc(); // first
-    timerId = setInterval(sendLoc, 15000);
-  }
-
-  function stopCheck(){
-    tracking = false;
-    btn.textContent = 'Bắt đầu ca';
-    clearInterval(timerId);
-    caSel.disabled = false;
-    updateStatus('Đã dừng', '');
-  }
-
-  function sendLoc(){
-    navigator.geolocation.getCurrentPosition(pos=>{
-      const lat = pos.coords.latitude, lon = pos.coords.longitude;
-      const coord = lat.toFixed(5)+','+lon.toFixed(5);
-      if (coord === prevCoord){
-        unchanged++; if (unchanged >= 3) clearInterval(timerId), timerId = setInterval(sendLoc, 60000);
-      } else {
-        prevCoord = coord; unchanged = 0;
-      }
-      const url = `${SCRIPT_URL}?Ca=${caSel.value}` +
-                  `&lat=${lat}&lon=${lon}` +
-                  `&id_token=${encodeURIComponent(idToken)}`;
-      jsonp(url, r => {
-        updateStatus(r.status==='OK'?'✅ Gửi OK':'❌ '+r.message, r.status==='OK'?'ok':'err');
-      });
-    }, err => {
-      updateStatus('❌ GPS: '+err.message, 'err');
-    }, { enableHighAccuracy:true, timeout:20000 });
-  }
-
-  function updateStatus(msg, cls){
-    st.textContent = msg; st.className = cls||'';
-  }
-  </script>
+  <script type="module" src="main.js"></script>
 </body>
 </html>
