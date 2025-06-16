@@ -1,79 +1,67 @@
-/****************  CONFIG  ****************/
-const CLIENT_ID    = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
-const SCRIPT_URL   = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
-const SEND_EVERY   = 15_000;          // 15 giây gửi GPS
-/******************************************/
+/***** CONFIG *****/
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+const SEND_EVERY = 15_000;  // 15 giây
+const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
+/******************/
 
-let me = {};                  // thông tin nhân viên sau khi login
-let shiftActive = false;      // trạng thái ca
-let watchID = null;           // geolocation.watchPosition id
-let refreshTimer = null;      // setInterval tải map
-let map;                      // Leaflet map instance
+let me = {},           // thông tin nhân viên
+    shiftActive = false,
+    watchID     = null,
+    refreshTimer= null,
+    map;
 
-/* ---------- KHỞI ĐỘNG ---------- */
-document.addEventListener('DOMContentLoaded', () => {
-  initAuth();                 // gắn Google Identity
-  hookButtons();              // gắn sự kiện nút
-});
-
-/* ---------- GOOGLE OAUTH ---------- */
-function initAuth() {
+/* ---------- KHỞI TẠO GOOGLE SIGN-IN ---------- */
+window.addEventListener('DOMContentLoaded', () => {
   google.accounts.id.initialize({
-    client_id : CLIENT_ID,
-    callback  : handleCredential
+    client_id: CLIENT_ID,
+    callback : onGoogleSignIn
   });
 
   google.accounts.id.renderButton(
-    document.getElementById('googleBtn'),
-    { theme: 'outline', size: 'large', locale: 'vi' }
+    document.getElementById('gSignIn'),
+    { theme: 'outline', size: 'large', width: 260 }
   );
-}
 
-async function handleCredential({ credential }) {
+  // Tự ẩn app cho tới khi đăng nhập
+  byId('app').hidden = true;
+});
+/* --------------------------------------------- */
+
+/* ---------- CALLBACK đăng nhập ---------- */
+async function onGoogleSignIn({ credential }) {
   try {
-    const payload = JSON.parse(atob(credential.split('.')[1])); // decode JWT
-    const email = payload.email;
-    const rs = await api('login', { email });
+    const email = JSON.parse(atob(credential.split('.')[1])).email;
+    const rs    = await api('login', { email });
 
     if (rs.status !== 'ok') {
-      alert('Bạn không thuộc ca trực!');
+      alert('Bạn không thuộc ca trực');
+      google.accounts.id.disableAutoSelect();   // cho phép chọn email khác
       return;
     }
 
-    /* --- Đăng nhập thành công --- */
-    me = rs;                              // rs trả về {status:'ok',email,name,unit,...}
-    qs('.auth').hidden   = true;
-    qs('#app').hidden    = false;
-    qs('#welcome').textContent = `Xin chào ${rs.name} – ${rs.unit}`;
+    me = rs;                             // {name, unit, email, ...}
+    byId('loginSec').hidden = true;
+    byId('app').hidden      = false;
+    byId('welcome').textContent = `Xin chào ${rs.name} (${rs.unit})`;
 
     restoreShift();
     initMap();
-  } catch (err) {
-    logErr(err);
-    alert('Đăng nhập thất bại!');
+  } catch (e) {
+    logErr(e);
   }
 }
 
-/* ---------- NÚT & GIAO DIỆN ---------- */
-function hookButtons() {
-  onClick('btnStart',  startShift);
-  onClick('btnEnd',    endShift);
-  onClick('btnInfo',   () => alert(JSON.stringify(me, null, 2)));
-  onClick('btnLogout', () => location.reload());
-}
+/* ---------- Các nút ---------- */
+byId('btnStart').onclick = startShift;
+byId('btnEnd'  ).onclick = endShift;
+byId('btnInfo' ).onclick = () => alert(JSON.stringify(me, null, 2));
+byId('btnLogout').onclick= () => location.reload();
 
-function uiShift() {
-  qs('#btnStart').hidden =  shiftActive;
-  qs('#btnEnd').hidden   = !shiftActive;
-  qs('#mapSec').hidden   = !shiftActive;
-  localStorage.setItem('shiftActive', shiftActive ? '1' : '0');
-}
-
-/* ---------- XỬ LÝ CA TRỰC ---------- */
+/* ---------- Logic ca trực ---------- */
 function restoreShift() {
-  shiftActive = localStorage.getItem('shiftActive') === '1';
-  uiShift();
-  if (shiftActive) {
+  if (localStorage.getItem('shiftActive') === '1') {
+    shiftActive = true;
+    uiShift();
     beginGeo();
   }
 }
@@ -84,19 +72,24 @@ async function startShift() {
     shiftActive = true;
     uiShift();
     beginGeo();
-  } else { alert('Không thể bắt đầu ca'); }
+  }
 }
-
 async function endShift() {
   const rs = await api('endShift', { email: me.email });
   if (rs.status === 'ok') {
     shiftActive = false;
     uiShift();
     stopGeo();
-  } else { alert('Không thể kết thúc ca'); }
+  }
+}
+function uiShift() {
+  byId('btnStart').hidden = shiftActive;
+  byId('btnEnd'  ).hidden = !shiftActive;
+  byId('mapSec'  ).hidden = !shiftActive;
+  localStorage.setItem('shiftActive', shiftActive ? '1' : '0');
 }
 
-/* ---------- GEO + BẢN ĐỒ ---------- */
+/* ---------- Bản đồ & GPS ---------- */
 function initMap() {
   map = L.map('map').setView([16, 106], 6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -106,18 +99,17 @@ function initMap() {
 
 function beginGeo() {
   if (!navigator.geolocation) {
-    alert('Trình duyệt không hỗ trợ GPS'); return;
+    alert('Trình duyệt không hỗ trợ GPS');
+    return;
   }
   watchID = navigator.geolocation.watchPosition(
     sendPos,
     err => logErr(err.message),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 10_000 }
   );
-  /* tải map đầu & set refresh */
-  loadPositions();
   refreshTimer = setInterval(loadPositions, 15_000);
+  loadPositions();
 }
-
 function stopGeo() {
   navigator.geolocation.clearWatch(watchID);
   clearInterval(refreshTimer);
@@ -132,41 +124,39 @@ async function loadPositions() {
   const rs = await api('getPositions', {});
   if (rs.status !== 'ok') return;
 
-  /* xoá marker cũ */
+  // Xóa marker cũ
   map.eachLayer(l => {
     if (l.options && l.options.pane === 'markerPane') map.removeLayer(l);
   });
 
-  const pts = [];
+  const bounds = [];
   rs.positions.forEach(p => {
-    L.marker([p.lat, p.lng]).addTo(map)
-      .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`)
-      .openTooltip();
-    pts.push([p.lat, p.lng]);
+    const mk = L.marker([p.lat, p.lng]).addTo(map)
+      .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
+    bounds.push([p.lat, p.lng]);
   });
-  if (pts.length) map.fitBounds(pts, { padding: [12, 12] });
+  if (bounds.length) map.fitBounds(bounds, { padding: [16, 16] });
 }
 
-function timeAgo(tISO) {
-  const s = (Date.now() - new Date(tISO).getTime()) / 1000;
-  if (s < 60)     return `${s.toFixed(0)}s trước`;
-  if (s < 3600)   return `${(s/60).toFixed(0)}m trước`;
-  return `${(s/3600).toFixed(1)}h trước`;
+function timeAgo(t) {
+  const d = (Date.now() - new Date(t).getTime()) / 1000;
+  if (d < 60)   return `${d.toFixed(0)} s`;
+  if (d < 3600) return `${(d / 60).toFixed(0)} m`;
+  return `${(d / 3600).toFixed(1)} h`;
 }
 
-/* ---------- HELPER ---------- */
-async function api(action, data = {}) {
+/* ---------- Helper gọi Apps Script ---------- */
+async function api(action, obj) {
   try {
-    const qs = new URLSearchParams({ ...data, action });
-    const res = await fetch(`${SCRIPT_URL}?${qs}`);
-    return await res.json();
+    const q = new URLSearchParams({ ...obj, action });
+    const r = await fetch(`${SCRIPT_URL}?${q}`);
+    return await r.json();
   } catch (e) {
     logErr(e);
-    return { status: 'err', message: String(e) };
+    return {};
   }
 }
 function logErr(msg) {
   fetch(`${SCRIPT_URL}?action=error&email=${me.email || ''}&message=${encodeURIComponent(msg)}`);
 }
-function qs(sel) { return document.querySelector(sel); }
-function onClick(id, fn) { document.getElementById(id).addEventListener('click', fn); }
+function byId(id) { return document.getElementById(id); }
