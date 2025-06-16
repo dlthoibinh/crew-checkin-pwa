@@ -1,41 +1,32 @@
 <!DOCTYPE html><html lang="vi">
 <head>
   <meta charset="utf-8">
-  <title>Bản đồ giám sát ca trực</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <title>Bản đồ nhân viên</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.10.2/dist/leaflet.css"/>
   <style>html,body,#map{height:100%;margin:0}</style>
 </head>
 <body>
 <div id="map"></div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.10.2/dist/leaflet.js"></script>
 <script>
-const API = 'https://script.google.com/macros/s/AKfycbyQtOhGWKhT6gEUAlBVfV9iKjqmtHXNaR_2XmkD1XSCOiuNbh6A5ulkq6PxUBWsZpbBgg/exec';
+const URL='https://script.google.com/macros/s/AKfycbyQtOhGWKhT6gEUAlBVfV9iKjqmtHXNaR_2XmkD1XSCOiuNbh6A5ulkq6PxUBWsZpbBgg/exec';
 
-const map = L.map('map').setView([16,106],6);
+const map=L.map('map').setView([16,106],6);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
- {attribution:'©OpenStreetMap'}).addTo(map);
+  {attribution:'© OpenStreetMap'}).addTo(map);
 
-async function refresh(){
-  try{
-    const r = await fetch(API+'?action=getPositions').then(r=>r.json());
-    if(r.status!=='ok') return;
-    map.eachLayer(l=>{if(l instanceof L.Marker) map.removeLayer(l);});
-    const bounds=[];
-    r.positions.forEach(p=>{
-      const m=L.marker([p.lat,p.lng]).addTo(map)
-        .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
-      bounds.push([p.lat,p.lng]);
-    });
-    if(bounds.length) map.fitBounds(bounds,{padding:[20,20]});
-  }catch(e){console.error(e);}
+async function reload(){
+   const r=await fetch(URL+'?action=getPositions');
+   const j=await r.json(); if(j.status!=='ok') return;
+   map.eachLayer(l=>l.options && l.options.pane==='markerPane' && map.removeLayer(l));
+   const b=[];
+   j.positions.forEach(p=>{
+      L.marker([p.lat,p.lng]).addTo(map)
+         .bindTooltip(`${p.name}<br>${p.unit}<br>${new Date(p.time).toLocaleTimeString()}`);
+      b.push([p.lat,p.lng]);
+   });
+   if(b.length) map.fitBounds(b,{padding:[12,12]});
 }
-function timeAgo(t){
-  const d=(Date.now()-new Date(t))/1000;
-  if(d<60) return d.toFixed(0)+'s';
-  if(d<3600) return (d/60).toFixed(0)+'m';
-  return (d/3600).toFixed(1)+'h';
-}
-refresh(); setInterval(refresh,15000);
+reload(); setInterval(reload,15000);
 </script>
 </body></html>
