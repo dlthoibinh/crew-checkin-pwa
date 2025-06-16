@@ -1,5 +1,5 @@
 /***** CONFIG *****/
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQtOhGWKhT6gEUAlBVfV9iKjqmtHXNaR_2XmkD1XSCOiuNbh6A5ulkq6PxUBWsZpbBgg/exec';
+const SCRIPT_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhj-QYblJcT_AL_bY4K8yZFFOLyoMRrGT7RNTmFtAph0cFrx6umsbBjt7sTjjTl598aNKQza4uj-sAUwaUnykNRT0gM6Gl6b9uCemkCmkMb7Dxsf6KnAl1lsxVDIg2l9aci4lavJGxGhnjtETreQA9J48NZliq40syR26SyqjPTW2ZheVnr4K1fjYVD3Iz8g1RZBiyAtajf6vA0c1tbJisAmjXLsOqcp49SaInxLjlegMIh-WQ9q9fmZFEtRS3-1f2S0YnIhAJfiBWPawmSAVQJxM138SzsWu-mQlfb&lib=Mj2tdQ0ba0zXGbvKAwFE7wJKUfz6QF1D1';
 const SEND_EVERY = 15_000;  // 15 giây
 const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 /******************/
