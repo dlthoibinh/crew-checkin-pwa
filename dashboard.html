@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8"/>
+<title>Dashboard – Check-in Ca trực</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<style>
+  body{margin:0;font-family:sans-serif}
+  #map{position:absolute;top:0;bottom:0;right:0;left:0}
+  .leaflet-tooltip{font-size:12px;line-height:1.3}
+  #refresh{position:absolute;top:8px;left:8px;z-index:1000}
+</style>
+</head>
+<body>
+<button id="refresh">↻ Cập nhật</button>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+
+const map = L.map('map').setView([16,105],6);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap'}).addTo(map);
+
+async function load(){
+  const r = await fetch(SCRIPT_URL+'?action=getPositions').then(r=>r.json());
+  if(r.status!=='ok') return alert('Không lấy được dữ liệu');
+  map.eachLayer(l=>{if(l.options&&l.options.pane==='markerPane')map.removeLayer(l);});
+  const pts = [];
+  r.positions.forEach(p=>{
+    pts.push([p.lat,p.lng]);
+    L.circleMarker([p.lat,p.lng],{radius:8})
+     .addTo(map)
+     .bindTooltip(`${p.name}<br>${p.unit}<br>${ago(p.time)}`);
+  });
+  if(pts.length) map.fitBounds(pts,{padding:[20,20]});
+}
+function ago(t){
+  const d=(Date.now()-new Date(t))/1000;
+  if(d<60)return d.toFixed(0)+'s';
+  if(d<3600)return (d/60).toFixed(0)+'m';
+  return (d/3600).toFixed(1)+'h';
+}
+document.getElementById('refresh').onclick=load;
+load();             // load lần đầu
+setInterval(load,15000); // tự refresh 15 s
+</script>
+</body>
+</html>
