@@ -154,23 +154,19 @@ function timeAgo(t) {
 
 /* ---------- Helper gọi Apps Script ---------- */
 async function api(action, payload = {}) {
-  try {
-    const sep  = SCRIPT_URL.includes('?') ? '&' : '?';
-    const url  = `${SCRIPT_URL}${sep}${new URLSearchParams({ ...payload, action })}`;
+  const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
 
-    const r = await fetch(url, {
-      credentials: 'include',      // ⭐ gửi cookie Google để tránh 302 ServiceLogin
-      cache:       'no-store',
-      headers:     { 'Accept': 'application/json' }
-    });
+  const r = await fetch(url, {
+    method: 'GET',          // hoặc POST tuỳ action
+    redirect: 'follow',     // ⭐ phải có – theo 302 sang googleusercontent.com
+    cache: 'no-store',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' } // “simple request”
+  });
 
-    if (!r.ok) throw new Error(`${action} → ${r.status}`);
-    return await r.json();
-  } catch (e) {
-    logErr(e.message || e);
-    return { status: 'error', msg: String(e) };
-  }
+  if (!r.ok) throw new Error(`${action} → ${r.status}`);
+  return r.json();          // Bây giờ parse OK
 }
+
 
 function logErr(msg) {
   const sep = SCRIPT_URL.includes('?') ? '&' : '?';
