@@ -1,14 +1,16 @@
 /***** CONFIG *****/
-const SCRIPT_URL = 'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhj-QYblJcT_AL_bY4K8yZFFOLyoMRrGT7RNTmFtAph0cFrx6umsbBjt7sTjjTl598aNKQza4uj-sAUwaUnykNRT0gM6Gl6b9uCemkCmkMb7Dxsf6KnAl1lsxVDIg2l9aci4lavJGxGhnjtETreQA9J48NZliq40syR26SyqjPTW2ZheVnr4K1fjYVD3Iz8g1RZBiyAtajf6vA0c1tbJisAmjXLsOqcp49SaInxLjlegMIh-WQ9q9fmZFEtRS3-1f2S0YnIhAJfiBWPawmSAVQJxM138SzsWu-mQlfb&lib=Mj2tdQ0ba0zXGbvKAwFE7wJKUfz6QF1D1';
-const SEND_EVERY = 15_000;  // 15 giây
-const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
+const SCRIPT_URL =
+  'https://script.googleusercontent.com/macros/echo?user_content_key=AehSKLhj-QYblJcT_AL_bY4K8yZFFOLyoMRrGT7RNTmFtAph0cFrx6umsbBjt7sTjjTl598aNKQza4uj-sAUwaUnykNRT0gM6Gl6b9uCemkCmkMb7Dxsf6KnAl1lsxVDIg2l9aci4lavJGxGhnjtETreQA9J48NZliq40syR26SyqjPTW2ZheVnr4K1fjYVD3Iz8g1RZBiyAtajf6vA0c1tbJisAmjXLsOqcp49SaInxLjlegMIh-WQ9q9fmZFEtRS3-1f2S0YnIhAJfiBWPawmSAVQJxM138SzsWu-mQlfb&lib=Mj2tdQ0ba0zXGbvKAwFE7wJKUfz6QF1D1';
+const SEND_EVERY = 15_000;          // 15 giây
+const CLIENT_ID  =
+  '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 /******************/
 
-let me = {},           // thông tin nhân viên
-    shiftActive = false,
-    watchID     = null,
-    refreshTimer= null,
-    map;
+let me = {};               // thông tin nhân viên
+let shiftActive = false;
+let watchID     = null;
+let refreshTimer= null;
+let map;
 
 /* ---------- KHỞI TẠO GOOGLE SIGN-IN ---------- */
 window.addEventListener('DOMContentLoaded', () => {
@@ -22,7 +24,7 @@ window.addEventListener('DOMContentLoaded', () => {
     { theme: 'outline', size: 'large', width: 260 }
   );
 
-  // Tự ẩn app cho tới khi đăng nhập
+  // Ẩn ứng dụng cho tới khi đăng nhập
   byId('app').hidden = true;
 });
 /* --------------------------------------------- */
@@ -39,7 +41,7 @@ async function onGoogleSignIn({ credential }) {
       return;
     }
 
-    me = rs;                             // {name, unit, email, ...}
+    me = rs; // {name, unit, email, ...}
     byId('loginSec').hidden = true;
     byId('app').hidden      = false;
     byId('welcome').textContent = `Xin chào ${rs.name} (${rs.unit})`;
@@ -48,14 +50,15 @@ async function onGoogleSignIn({ credential }) {
     initMap();
   } catch (e) {
     logErr(e);
+    alert('Đăng nhập thất bại, thử lại sau!');
   }
 }
 
 /* ---------- Các nút ---------- */
-byId('btnStart').onclick = startShift;
-byId('btnEnd'  ).onclick = endShift;
-byId('btnInfo' ).onclick = () => alert(JSON.stringify(me, null, 2));
-byId('btnLogout').onclick= () => location.reload();
+byId('btnStart').onclick  = startShift;
+byId('btnEnd').onclick    = endShift;
+byId('btnInfo').onclick   = () => alert(JSON.stringify(me, null, 2));
+byId('btnLogout').onclick = () => location.reload();
 
 /* ---------- Logic ca trực ---------- */
 function restoreShift() {
@@ -72,20 +75,26 @@ async function startShift() {
     shiftActive = true;
     uiShift();
     beginGeo();
+  } else {
+    alert('Không thể bắt đầu ca!');
   }
 }
+
 async function endShift() {
   const rs = await api('endShift', { email: me.email });
   if (rs.status === 'ok') {
     shiftActive = false;
     uiShift();
     stopGeo();
+  } else {
+    alert('Không thể kết thúc ca!');
   }
 }
+
 function uiShift() {
-  byId('btnStart').hidden = shiftActive;
-  byId('btnEnd'  ).hidden = !shiftActive;
-  byId('mapSec'  ).hidden = !shiftActive;
+  byId('btnStart').hidden =  shiftActive;
+  byId('btnEnd').hidden   = !shiftActive;
+  byId('mapSec').hidden   = !shiftActive;
   localStorage.setItem('shiftActive', shiftActive ? '1' : '0');
 }
 
@@ -110,6 +119,7 @@ function beginGeo() {
   refreshTimer = setInterval(loadPositions, 15_000);
   loadPositions();
 }
+
 function stopGeo() {
   navigator.geolocation.clearWatch(watchID);
   clearInterval(refreshTimer);
@@ -117,7 +127,12 @@ function stopGeo() {
 
 async function sendPos(pos) {
   const { latitude: lat, longitude: lng } = pos.coords;
-  await api('log', { email: me.email, lat, lng, time: new Date().toISOString() });
+  await api('log', {
+    email: me.email,
+    lat,
+    lng,
+    time: new Date().toISOString()
+  });
 }
 
 async function loadPositions() {
@@ -131,7 +146,8 @@ async function loadPositions() {
 
   const bounds = [];
   rs.positions.forEach(p => {
-    const mk = L.marker([p.lat, p.lng]).addTo(map)
+    L.marker([p.lat, p.lng])
+      .addTo(map)
       .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
     bounds.push([p.lat, p.lng]);
   });
@@ -140,23 +156,37 @@ async function loadPositions() {
 
 function timeAgo(t) {
   const d = (Date.now() - new Date(t).getTime()) / 1000;
-  if (d < 60)   return `${d.toFixed(0)} s`;
-  if (d < 3600) return `${(d / 60).toFixed(0)} m`;
-  return `${(d / 3600).toFixed(1)} h`;
+  if (d < 60)   return `${d.toFixed(0)} s trước`;
+  if (d < 3600) return `${(d / 60).toFixed(0)} m trước`;
+  return `${(d / 3600).toFixed(1)} h trước`;
 }
 
 /* ---------- Helper gọi Apps Script ---------- */
-async function api(action, obj) {
+async function api(action, payload) {
   try {
-    const q = new URLSearchParams({ ...obj, action });
-    const r = await fetch(`${SCRIPT_URL}?${q}`);
+    const q   = new URLSearchParams({ ...payload, action });
+    // Nếu SCRIPT_URL đã chứa '?', dùng '&'
+    const sep = SCRIPT_URL.includes('?') ? '&' : '?';
+    const r   = await fetch(`${SCRIPT_URL}${sep}${q}`, { cache: 'no-store' });
+
+    if (!r.ok) throw new Error(`${action} status ${r.status}`);
     return await r.json();
   } catch (e) {
-    logErr(e);
-    return {};
+    logErr(e.message || e);
+    return { status: 'error', msg: String(e) };
   }
 }
+
 function logErr(msg) {
-  fetch(`${SCRIPT_URL}?action=error&email=${me.email || ''}&message=${encodeURIComponent(msg)}`);
+  // Ghi lỗi nhưng không chặn luồng chính
+  const sep = SCRIPT_URL.includes('?') ? '&' : '?';
+  fetch(
+    `${SCRIPT_URL}${sep}action=error&email=${encodeURIComponent(
+      me.email || ''
+    )}&message=${encodeURIComponent(msg)}`
+  ).catch(() => {});
 }
-function byId(id) { return document.getElementById(id); }
+
+function byId(id) {
+  return document.getElementById(id);
+}
