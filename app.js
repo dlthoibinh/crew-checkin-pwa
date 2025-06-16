@@ -1,7 +1,7 @@
 /***** CONFIG *****/
 const SCRIPT_URL =
   'https://script.google.com/macros/s/AKfycbyQtOhGWKhT6gEUAlBVfV9iKjqmtHXNaR_2XmkD1XSCOiuNbh6A5ulkq6PxUBWsZpbBgg/exec';
-const SEND_EVERY = 15_000;          // 15 giây
+const SEND_EVERY = 15_000;              // 15 giây
 const CLIENT_ID  =
   '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 /******************/
@@ -37,13 +37,13 @@ async function onGoogleSignIn({ credential }) {
 
     if (rs.status !== 'ok') {
       alert('Bạn không thuộc ca trực');
-      google.accounts.id.disableAutoSelect();   // cho phép chọn email khác
+      google.accounts.id.disableAutoSelect();      // cho phép chọn email khác
       return;
     }
 
-    me = rs; // {name, unit, email, ...}
-    byId('loginSec').hidden = true;
-    byId('app').hidden      = false;
+    me = rs;                                       // {name, unit, email, …}
+    byId('loginSec').hidden  = true;
+    byId('app').hidden       = false;
     byId('welcome').textContent = `Xin chào ${rs.name} (${rs.unit})`;
 
     restoreShift();
@@ -75,9 +75,7 @@ async function startShift() {
     shiftActive = true;
     uiShift();
     beginGeo();
-  } else {
-    alert('Không thể bắt đầu ca!');
-  }
+  } else alert('Không thể bắt đầu ca!');
 }
 
 async function endShift() {
@@ -86,9 +84,7 @@ async function endShift() {
     shiftActive = false;
     uiShift();
     stopGeo();
-  } else {
-    alert('Không thể kết thúc ca!');
-  }
+  } else alert('Không thể kết thúc ca!');
 }
 
 function uiShift() {
@@ -116,7 +112,7 @@ function beginGeo() {
     err => logErr(err.message),
     { enableHighAccuracy: true, maximumAge: 0, timeout: 10_000 }
   );
-  refreshTimer = setInterval(loadPositions, 15_000);
+  refreshTimer = setInterval(loadPositions, SEND_EVERY);
   loadPositions();
 }
 
@@ -127,19 +123,14 @@ function stopGeo() {
 
 async function sendPos(pos) {
   const { latitude: lat, longitude: lng } = pos.coords;
-  await api('log', {
-    email: me.email,
-    lat,
-    lng,
-    time: new Date().toISOString()
-  });
+  await api('log', { email: me.email, lat, lng, time: new Date().toISOString() });
 }
 
 async function loadPositions() {
   const rs = await api('getPositions', {});
   if (rs.status !== 'ok') return;
 
-  // Xóa marker cũ
+  // Xoá marker cũ
   map.eachLayer(l => {
     if (l.options && l.options.pane === 'markerPane') map.removeLayer(l);
   });
@@ -162,14 +153,18 @@ function timeAgo(t) {
 }
 
 /* ---------- Helper gọi Apps Script ---------- */
-async function api(action, payload) {
+async function api(action, payload = {}) {
   try {
-    const q   = new URLSearchParams({ ...payload, action });
-    // Nếu SCRIPT_URL đã chứa '?', dùng '&'
-    const sep = SCRIPT_URL.includes('?') ? '&' : '?';
-    const r   = await fetch(`${SCRIPT_URL}${sep}${q}`, { cache: 'no-store' });
+    const sep  = SCRIPT_URL.includes('?') ? '&' : '?';
+    const url  = `${SCRIPT_URL}${sep}${new URLSearchParams({ ...payload, action })}`;
 
-    if (!r.ok) throw new Error(`${action} status ${r.status}`);
+    const r = await fetch(url, {
+      credentials: 'include',      // ⭐ gửi cookie Google để tránh 302 ServiceLogin
+      cache:       'no-store',
+      headers:     { 'Accept': 'application/json' }
+    });
+
+    if (!r.ok) throw new Error(`${action} → ${r.status}`);
     return await r.json();
   } catch (e) {
     logErr(e.message || e);
@@ -178,15 +173,11 @@ async function api(action, payload) {
 }
 
 function logErr(msg) {
-  // Ghi lỗi nhưng không chặn luồng chính
   const sep = SCRIPT_URL.includes('?') ? '&' : '?';
   fetch(
-    `${SCRIPT_URL}${sep}action=error&email=${encodeURIComponent(
-      me.email || ''
-    )}&message=${encodeURIComponent(msg)}`
+    `${SCRIPT_URL}${sep}action=error&email=${encodeURIComponent(me.email || '')}` +
+    `&message=${encodeURIComponent(msg)}`
   ).catch(() => {});
 }
 
-function byId(id) {
-  return document.getElementById(id);
-}
+const byId = id => document.getElementById(id);
