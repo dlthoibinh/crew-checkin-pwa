@@ -1,34 +1,64 @@
-<!DOCTYPE html><html lang="vi">
+<!DOCTYPE html>
+<html lang="vi">
 <head>
-<meta charset="utf-8"><title>Check in Ca trực</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="manifest" href="manifest.json">
-<link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+
+  <title>Check in Ca trực</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="icon" href="icon-192.png" />
+
+  <!-- Styles -->
+  <link rel="stylesheet" href="style.css" />
+
+  <!-- Google Identity script -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- Leaflet CSS (bản đồ)-->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    integrity="sha256-sA+4JpQDRkz0Ecp0/nt7UyTz5WgGIHkI54o8BE1Bjtk="
+    crossorigin=""
+  />
 </head>
+
 <body>
-<header><img src="icon-192.png" class="logo"><h1>Check in Ca trực</h1></header>
+  <!-- Thanh tiêu đề -->
+  <header class="topbar">
+    <img src="evn_logo.png" height="32" alt="EVN" />
+    <h1>Check in Ca trực</h1>
+  </header>
 
-<!-- GOOGLE SIGN IN -->
-<div id="g_id_onload"
-     data-client_id="280769604046-iiloggjv492ro50phm1qnp0l3ni0b4l5.apps.googleusercontent.com"
-     data-auto_prompt="false"
-     data-callback="onGoogleSignIn"></div>
-<div class="g_id_signin" data-type="standard"></div>
-
-<!-- APP MAIN -->
-<main id="app" hidden>
-  <p id="welcome"></p>
-  <button id="btnStart" class="primary">Bắt đầu trực ca</button>
-  <button id="btnEnd" class="danger" hidden>Kết thúc ca</button>
-  <button id="btnInfo">Thông tin nhân viên</button>
-  <button id="btnLogout">Đăng xuất</button>
-  <section id="mapSec" hidden>
-    <h2>Bản đồ thời gian thực</h2><div id="map"></div>
+  <!-- Vùng nút đăng nhập Google -->
+  <section id="loginSec">
+    <!-- nút sẽ được JS “google.accounts.id.renderButton” vẽ vào -->
+    <div id="gSignIn"></div>
   </section>
-</main>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script>
-</body></html>
+  <!-- Ứng dụng chính (ẩn cho tới khi đăng nhập) -->
+  <main id="app" hidden>
+    <p id="welcome"></p>
+
+    <button id="btnStart">Bắt đầu ca</button>
+    <button id="btnEnd"   hidden>Kết thúc ca</button>
+    <button id="btnInfo">Thông tin nhân viên</button>
+    <button id="btnLogout">Đăng xuất</button>
+
+    <section id="mapSec" hidden>
+      <h2>Vị trí thời gian thực</h2>
+      <div id="map" style="height:400px;"></div>
+    </section>
+  </main>
+
+  <!-- JS chính của ứng dụng -->
+  <script src="app.js"></script>
+
+  <!-- Leaflet JS -->
+  <script
+    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+    integrity="sha256-o9N1jLF6C9odNj/imiSM39Y+35xb94pFfclJ90Rk0Po="
+    crossorigin=""
+  ></script>
+</body>
+</html>
