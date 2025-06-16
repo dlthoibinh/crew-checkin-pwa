@@ -1,5 +1,5 @@
 /***** CONFIG *****/
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5dqnvTfMuMPjIkdWapz7HC9k15NiKImjhkMtPa1NymMuvtZcsf9gkfZ4BWtG2q8KkcA/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyQtOhGWKhT6gEUAlBVfV9iKjqmtHXNaR_2XmkD1XSCOiuNbh6A5ulkq6PxUBWsZpbBgg/exec';
 const SEND_EVERY = 15_000;  // 15 giây
 const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 /******************/
