@@ -153,18 +153,30 @@ function timeAgo(t) {
 }
 
 /* ---------- Helper gọi Apps Script ---------- */
-async function api(action, payload = {}) {
-  const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
+// JSONP helper
+function api(action, payload = {}) {
+  return new Promise((resolve, reject) => {
+    const cbName = 'cb' + Date.now().toString(36);          // tên hàm tạm
+    payload = { ...payload, action, callback: cbName };
 
-  const r = await fetch(url, {
-    method: 'GET',          // hoặc POST tuỳ action
-    redirect: 'follow',     // ⭐ phải có – theo 302 sang googleusercontent.com
-    cache: 'no-store',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' } // “simple request”
+    const url = SCRIPT_URL + '?' + new URLSearchParams(payload);
+    const script = document.createElement('script');
+
+    // tạo hàm callback toàn cục
+    window[cbName] = data => {
+      delete window[cbName];
+      script.remove();
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      delete window[cbName];
+      script.remove();
+      reject(new Error('JSONP load error'));
+    };
+    script.src = url;
+    document.head.appendChild(script);
   });
-
-  if (!r.ok) throw new Error(`${action} → ${r.status}`);
-  return r.json();          // Bây giờ parse OK
 }
 
 
