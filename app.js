@@ -27,19 +27,48 @@ window.addEventListener('DOMContentLoaded', ()=>{
     {theme:'outline',size:'large',width:260});
 });
 
-async function onGoogleSignIn({credential}){
-  try{
-    const email = decodeJwt(credential).email;
-    const rs    = await api('login',{email});
-    console.log('LOGIN RESPONSE', rs);
-    if(rs.status!=='ok'){ alert('Bạn không thuộc ca trực'); return; }
+/* -----------------------------------------------------------
+ *  Callback Google Identity Services
+ *  – Nhận `response.credential` (JWT)  →  lấy email  →  gọi API “login”
+ * ----------------------------------------------------------- */
+async function onGoogleSignIn(response) {
+  try {
+    /* 1. Giải mã phần payload của JWT (base64url) để lấy email */
+    const base64   = response.credential           // id-token JWT
+                          .split('.')[1]           // phần payload
+                          .replace(/-/g, '+')      // base64url → base64
+                          .replace(/_/g, '/');
+    const payload  = JSON.parse(atob(base64));
+    const email    = (payload.email || '').trim().toLowerCase();
+    window.lastJWTemail = email;                   // 👉 tiện debug
 
-    me = rs;
-    $('loginSec').hidden = true; $('app').hidden = false;
-    $('welcome').textContent=`Xin chào ${me.name} (${me.unit})`;
-    initMap(); restoreShift();
-  }catch(e){ logErr(e); alert('Đăng nhập thất bại – thử lại!'); }
+    /* 2. Gọi back-end kiểm tra tài khoản */
+    const rs = await api('login', { email });
+    console.log('LOGIN RESPONSE', rs);             // 👉 xem nhanh
+
+    if (rs.status !== 'ok') {                      // email không hợp lệ
+      alert('Bạn không thuộc ca trực');
+      google.accounts.id.disableAutoSelect();
+      return;
+    }
+
+    /* 3. Lưu info, cập nhật giao diện */
+    me = rs;                                       // {name, unit, comp, …}
+    byId('loginSec').hidden = true;
+    byId('app').hidden      = false;
+    byId('welcome').textContent =
+      `Xin chào ${rs.name} (${rs.unit})`;
+
+    /* 4. Khôi phục ca chưa kết thúc & khởi tạo bản đồ */
+    restoreShift();
+    initMap();
+
+  } catch (err) {                                  // mọi lỗi khác
+    logErr(err);
+    alert('Đăng nhập thất bại – thử lại!');
+  }
 }
+
 
 /* ---------- Nút ---------- */
 $('btnStart').onclick=startShift; $('btnEnd').onclick=endShift;
