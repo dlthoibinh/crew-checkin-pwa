@@ -160,9 +160,15 @@ async function api(action, payload = {}) {
 
   let txt = await r.text();
 
-  /* Google thêm tiền tố chống XSSI:  )]}'  HOẶC  )]}"}  HOẶC  )]}',\n…
-     → cắt TẤT CẢ ký tự không phải { hoặc [ ở đầu chuỗi                       */
-  txt = txt.replace(/^[^\[\{]+/, '');
+  /* Tìm vị trí '{' hoặc '[' đầu tiên (bắt đầu JSON) */
+  const brace   = txt.indexOf('{');
+  const bracket = txt.indexOf('[');
+  const pos = brace >= 0 && bracket >= 0 ? Math.min(brace, bracket)
+            : brace >= 0                 ? brace
+            : bracket;                   // có thể -1 nếu phản hồi rỗng
+
+  if (pos === -1) throw new Error('JSON not found');   // phòng ngừa
+  txt = txt.slice(pos);
 
   return JSON.parse(txt);
 }
