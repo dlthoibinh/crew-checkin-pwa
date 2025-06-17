@@ -1,22 +1,25 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>EVN Bản đồ giám sát vị trí ca trực</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Bản đồ giám sát vị trí ca trực</title>
 
-<!-- Leaflet -->
-<link rel="stylesheet"
-      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet – bỏ integrity để tránh Chrome chặn -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-<style>
-  body{margin:0;font-family:sans-serif}
-  header{background:#0156a3;color:#fff;padding:12px 16px;font-size:20px;
-         font-weight:600;display:flex;align-items:center;gap:8px}
-  header img{height:28px}
-  #map{height:calc(100vh - 56px);width:100%}
-</style>
+  <style>
+    body{margin:0;font-family:sans-serif;background:#eef}
+    header{background:#0156a3;color:#fff;font-weight:700;font-size:22px;
+           padding:10px 16px;display:flex;align-items:center;gap:8px}
+    header img{height:28px}
+    .filters{padding:8px 16px;display:flex;gap:16px;align-items:center}
+    .filters label{font-weight:500}
+    #map{height:calc(100vh - 120px);width:100%}
+    select,button,input[type=checkbox]{font-size:14px}
+  </style>
 </head>
 <body>
   <header>
@@ -24,60 +27,105 @@
     <span>Bản đồ giám sát vị trí ca trực</span>
   </header>
 
+  <!-- Bộ lọc -->
+  <div class="filters">
+    <label>
+      Đơn vị&nbsp;
+      <select id="selUnit">
+        <option value="*">*</option>
+      </select>
+    </label>
+
+    <label>
+      <input type="checkbox" id="ckActive" checked>
+      Đang trong ca
+    </label>
+
+    <button id="btnReload">Lọc</button>
+  </div>
+
   <div id="map"></div>
 
-<script>
-/* ===== CONFIG giống app.js ===== */
-const SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mxb96mi3_9nUhp1u5lrOKhYuNlTMcrjKJo7kUbhcwxP--87Q/exec';
-const REFRESH_EVERY = 15_000;
+  <script>
+  /***** CONFIG giống app.js *****/
+  const SCRIPT_URL =
+    'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mxb96mi3_9nUhp1u5lrOKhYuNlTMcrjKJo7kUbhcwxP--87Q/exec';
+  /********************************/
 
-/* ===== API helper (đã xử lý tiền tố XSSI) ===== */
-async function api(action){
-  const url = SCRIPT_URL + '?action=' + action;
-  const r   = await fetch(url,{redirect:'follow',cache:'no-store'});
-  let txt   = await r.text();
-  const i1  = txt.indexOf('{'); const i2 = txt.indexOf('[');
-  const pos = (i1>=0&&i2>=0)?Math.min(i1,i2):(i1>=0?i1:i2);
-  if(pos>0) txt = txt.slice(pos);
-  return JSON.parse(txt);
-}
+  /* ---- helper ---- */
+  function byId(id){ return document.getElementById(id); }
 
-/* ===== Init map ===== */
-const map = L.map('map').setView([16,106],6);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-            {attribution:'© OpenStreetMap'}).addTo(map);
+  /* ---- init map ---- */
+  const map = L.map('map').setView([16,106],6);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© OpenStreetMap'
+  }).addTo(map);
 
-/* ===== Load + hiển thị vị trí ca trực ===== */
-let refreshTimer = null;
-loadPositions();
-refreshTimer = setInterval(loadPositions, REFRESH_EVERY);
+  /* ---- API call (cắt tiền tố XSSI) ---- */
+  async function api(action, payload={}){
+    const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
+    const r   = await fetch(url,{redirect:'follow',cache:'no-store'});
+    let txt   = await r.text();
+    const pBrace = Math.min(
+      ...['{','['].map(ch=>txt.indexOf(ch)).filter(i=>i>=0)
+    );
+    if(pBrace>0) txt = txt.slice(pBrace);
+    return JSON.parse(txt);
+  }
 
-async function loadPositions(){
-  const rs = await api('getPositions');
-  if(rs.status!=='ok') return;
+  /* ---- timeAgo ----- */
+  function timeAgo(t){
+    const d=(Date.now()-new Date(t).getTime())/1000;
+    if(d<60) return d.toFixed(0)+' s trước';
+    if(d<3600) return (d/60).toFixed(0)+' m trước';
+    return (d/3600).toFixed(1)+' h trước';
+  }
 
-  // xoá marker cũ
-  map.eachLayer(l=>{
-    if(l.options && l.options.pane==='markerPane') map.removeLayer(l);
-  });
+  /* ---- load & filter ---- */
+  async function initUnits(){
+    const rs = await api('getPositions',{});
+    if(rs.status!=='ok') return;
+    const sel = byId('selUnit');
+    [...new Set(rs.positions.map(p=>p.unit))].sort().forEach(u=>{
+      const opt=document.createElement('option');
+      opt.value=u;opt.textContent=u;sel.appendChild(opt);
+    });
+  }
 
-  const bounds = [];
-  rs.positions.forEach(p=>{
-    L.marker([p.lat,p.lng])
-     .addTo(map)
-     .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
-    bounds.push([p.lat,p.lng]);
-  });
-  if(bounds.length) map.fitBounds(bounds,{padding:[16,16]});
-}
+  async function loadPositions(){
+    const unitSel = byId('selUnit').value;   // '*' hoặc tên đơn vị
+    const onlyOn  = byId('ckActive').checked;
+    const now     = Date.now();
 
-function timeAgo(t){
-  const d=(Date.now()-new Date(t).getTime())/1000;
-  if(d<60) return `${d.toFixed(0)} s trước`;
-  if(d<3600) return `${(d/60).toFixed(0)} m trước`;
-  return `${(d/3600).toFixed(1)} h trước`;
-}
-</script>
+    const rs = await api('getPositions',{});
+    if(rs.status!=='ok') return;
+
+    // clear markers
+    map.eachLayer(l=>{
+      if(l.options && l.options.pane==='markerPane') map.removeLayer(l);
+    });
+
+    const bounds=[];
+    rs.positions
+      .filter(p => unitSel==='*' || p.unit===unitSel)
+      .filter(p => !onlyOn || (now - new Date(p.time).getTime()) < 3600*1000)
+      .forEach(p=>{
+        L.marker([p.lat,p.lng])
+          .addTo(map)
+          .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
+        bounds.push([p.lat,p.lng]);
+      });
+    if(bounds.length) map.fitBounds(bounds,{padding:[16,16]});
+  }
+
+  byId('btnReload').onclick = loadPositions;
+
+  /* ---- kick off ---- */
+  (async()=>{
+    await initUnits();
+    await loadPositions();
+    setInterval(loadPositions, 15_000);     // tự refresh 15 giây/lần
+  })();
+  </script>
 </body>
 </html>
