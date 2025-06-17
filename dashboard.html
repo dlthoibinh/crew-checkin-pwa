@@ -5,9 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Bản đồ giám sát vị trí ca trực</title>
 
-  <!-- Leaflet – bỏ integrity để tránh Chrome chặn -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
@@ -15,116 +14,171 @@
     header{background:#0156a3;color:#fff;font-weight:700;font-size:22px;
            padding:10px 16px;display:flex;align-items:center;gap:8px}
     header img{height:28px}
-    .filters{padding:8px 16px;display:flex;gap:16px;align-items:center}
-    .filters label{font-weight:500}
-    #map{height:calc(100vh - 120px);width:100%}
-    select,button,input[type=checkbox]{font-size:14px}
+
+    .filters{padding:8px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:#f4f6ff;border-bottom:1px solid #ccc}
+    .filters label{font-weight:500;display:flex;align-items:center;gap:4px}
+    .filters input,.filters select{padding:4px 6px;font-size:14px}
+
+    #map{height:calc(100vh - 152px);width:100%}
+    #tbl{width:100%;border-collapse:collapse;font-size:14px}
+    #tbl th,#tbl td{border:1px solid #ccc;padding:4px 6px;text-align:left}
+    #tbl th{background:#0156a3;color:#fff;position:sticky;top:0}
+    #report{margin-left:auto}
   </style>
 </head>
 <body>
   <header>
-    <img src="./evn_logo.png" alt="EVN">
+    <img src="./evn_logo.png" alt="EVN" />
     <span>Bản đồ giám sát vị trí ca trực</span>
   </header>
 
   <!-- Bộ lọc -->
   <div class="filters">
-    <label>
-      Đơn vị&nbsp;
-      <select id="selUnit">
-        <option value="*">*</option>
-      </select>
+    <label>CTY
+      <select id="selComp"><option value="*">*</option></select>
     </label>
 
-    <label>
-      <input type="checkbox" id="ckActive" checked>
-      Đang trong ca
+    <label>Đơn vị
+      <select id="selUnit"><option value="*">*</option></select>
+    </label>
+
+    <label>Nhân viên
+      <select id="selEmp"><option value="*">*</option></select>
+    </label>
+
+    <label>Đang trong ca
+      <input type="checkbox" id="ckActive" checked />
+    </label>
+
+    <label>Tìm
+      <input type="text" id="txtSearch" placeholder="Tên / email" />
     </label>
 
     <button id="btnReload">Lọc</button>
+    <button id="report">Xuất CSV</button>
   </div>
 
   <div id="map"></div>
 
   <script>
-  /***** CONFIG giống app.js *****/
+  /***** CONFIG *****/
   const SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mxb96mi3_9nUhp1u5lrOKhYuNlTMcrjKJo7kUbhcwxP--87Q/exec';
-  /********************************/
+  const REFRESH = 15_000;
 
-  /* ---- helper ---- */
-  function byId(id){ return document.getElementById(id); }
+  /* helpers */
+  const $ = id=>document.getElementById(id);
 
-  /* ---- init map ---- */
-  const map = L.map('map').setView([16,106],6);
+  function timeAgo(t){
+    const d=(Date.now()-new Date(t).getTime())/1000;
+    if(d<60) return d.toFixed(0)+' s';
+    if(d<3600) return (d/60).toFixed(0)+' m';
+    return (d/3600).toFixed(1)+' h';
+  }
+  async function api(action,payload={}){
+    const url=SCRIPT_URL+'?'+new URLSearchParams({...payload,action});
+    const r=await fetch(url,{redirect:'follow',cache:'no-store'});
+    let txt=await r.text();
+    const i=Math.min(...['{','['].map(ch=>txt.indexOf(ch)).filter(i=>i>=0));
+    if(i>0) txt=txt.slice(i);
+    return JSON.parse(txt);
+  }
+
+  /* map */
+  const map=L.map('map').setView([16,106],6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© OpenStreetMap'
   }).addTo(map);
 
-  /* ---- API call (cắt tiền tố XSSI) ---- */
-  async function api(action, payload={}){
-    const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
-    const r   = await fetch(url,{redirect:'follow',cache:'no-store'});
-    let txt   = await r.text();
-    const pBrace = Math.min(
-      ...['{','['].map(ch=>txt.indexOf(ch)).filter(i=>i>=0)
-    );
-    if(pBrace>0) txt = txt.slice(pBrace);
-    return JSON.parse(txt);
-  }
+  /* state */
+  let allPos=[];
 
-  /* ---- timeAgo ----- */
-  function timeAgo(t){
-    const d=(Date.now()-new Date(t).getTime())/1000;
-    if(d<60) return d.toFixed(0)+' s trước';
-    if(d<3600) return (d/60).toFixed(0)+' m trước';
-    return (d/3600).toFixed(1)+' h trước';
-  }
-
-  /* ---- load & filter ---- */
-  async function initUnits(){
-    const rs = await api('getPositions',{});
+  /* init dropdowns */
+  async function initLookups(){
+    const rs=await api('getPositions',{});
     if(rs.status!=='ok') return;
-    const sel = byId('selUnit');
-    [...new Set(rs.positions.map(p=>p.unit))].sort().forEach(u=>{
-      const opt=document.createElement('option');
-      opt.value=u;opt.textContent=u;sel.appendChild(opt);
+    allPos=rs.positions;
+    fillSelect($('#selComp'),[...new Set(allPos.map(p=>p.comp))]);
+    fillSelect($('#selUnit'),[...new Set(allPos.map(p=>p.unit))]);
+    fillSelect($('#selEmp'),[...new Set(allPos.map(p=>p.name))]);
+  }
+  function fillSelect(sel,arr){
+    arr.sort().forEach(v=>{
+      const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);
     });
   }
 
+  /* filtering */
   async function loadPositions(){
-    const unitSel = byId('selUnit').value;   // '*' hoặc tên đơn vị
-    const onlyOn  = byId('ckActive').checked;
-    const now     = Date.now();
+    const comp=$('#selComp').value;
+    const unit=$('#selUnit').value;
+    const emp=$('#selEmp').value;
+    const kw=$('#txtSearch').value.trim().toLowerCase();
+    const onlyOn=$('#ckActive').checked;
+    const now=Date.now();
 
-    const rs = await api('getPositions',{});
+    const rs=await api('getPositions',{});
     if(rs.status!=='ok') return;
+    allPos=rs.positions;
 
-    // clear markers
-    map.eachLayer(l=>{
-      if(l.options && l.options.pane==='markerPane') map.removeLayer(l);
-    });
+    // clear marker
+    map.eachLayer(l=>{ if(l.options&&l.options.pane==='markerPane') map.removeLayer(l); });
 
     const bounds=[];
-    rs.positions
-      .filter(p => unitSel==='*' || p.unit===unitSel)
-      .filter(p => !onlyOn || (now - new Date(p.time).getTime()) < 3600*1000)
-      .forEach(p=>{
-        L.marker([p.lat,p.lng])
-          .addTo(map)
-          .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)}`);
-        bounds.push([p.lat,p.lng]);
-      });
+    const filtered=allPos.filter(p=>
+        (comp==='*'||p.comp===comp) &&
+        (unit==='*'||p.unit===unit) &&
+        (emp==='*'||p.name===emp) &&
+        (!onlyOn || (now-new Date(p.time).getTime())<3600*1000) &&
+        (kw==='' || p.name.toLowerCase().includes(kw) || p.email.toLowerCase().includes(kw))
+    );
+
+    filtered.forEach(p=>{
+      L.marker([p.lat,p.lng]).addTo(map)
+        .bindTooltip(`${p.name}<br>${p.unit}<br>${timeAgo(p.time)} trước`);
+      bounds.push([p.lat,p.lng]);
+    });
     if(bounds.length) map.fitBounds(bounds,{padding:[16,16]});
   }
 
-  byId('btnReload').onclick = loadPositions;
+  /* report CSV */
+  function exportCSV(){
+    if(!allPos.length){ alert('Chưa có dữ liệu'); return; }
+    const rows=[['email','name','unit','comp','lat','lng','time']];
+    allPos.forEach(p=>rows.push([p.email,p.name,p.unit,p.comp,p.lat,p.lng,p.time]));
+    const csv=rows.map(r=>r.join(',')).join('\n');
+    const blob=new Blob([csv],{type:'text/csv'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='report.csv';a.click();URL.revokeObjectURL(url);
+  }
 
-  /* ---- kick off ---- */
+  /* wire events */
+  $('#btnReload').onclick=loadPositions;
+  $('#report').onclick=exportCSV;
+  $('#selComp').onchange=()=>syncSub();
+  $('#selUnit').onchange=()=>syncEmp();
+
+  function syncSub(){
+    const comp=$('#selComp').value;
+    const units=[...new Set(allPos.filter(p=>comp==='*'||p.comp===comp).map(p=>p.unit))];
+    $('#selUnit').innerHTML='<option value="*">*</option>';fillSelect($('#selUnit'),units);
+    syncEmp();
+  }
+  function syncEmp(){
+    const comp=$('#selComp').value,unit=$('#selUnit').value;
+    const emps=[...new Set(allPos.filter(p=>
+      (comp==='*'||p.comp===comp)&&
+      (unit==='*'||p.unit===unit)
+    ).map(p=>p.name))];
+    $('#selEmp').innerHTML='<option value="*">*</option>';fillSelect($('#selEmp'),emps);
+  }
+
+  /* kick off */
   (async()=>{
-    await initUnits();
+    await initLookups();
     await loadPositions();
-    setInterval(loadPositions, 15_000);     // tự refresh 15 giây/lần
+    setInterval(loadPositions, REFRESH);
   })();
   </script>
 </body>
