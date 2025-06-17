@@ -77,14 +77,33 @@
     if(d<3600) return (d/60).toFixed(0)+' m';
     return (d/3600).toFixed(1)+' h';
   }
-  async function api(action,payload={}){
-    const url = SCRIPT_URL+'?'+new URLSearchParams({...payload,action});
-    const r   = await fetch(url,{redirect:'follow',cache:'no-store'});
-    let txt   = await r.text();
-    const i   = Math.min(...['{','['].map(c=>txt.indexOf(c)).filter(i=>i>=0));
-    if(i>0) txt = txt.slice(i);
-    return JSON.parse(txt);
-  }
+/* ---------- Helper gọi Apps Script (JSONP, tránh CORS) ---------- */
+function api(action, payload = {}) {
+  return new Promise((resolve, reject) => {
+    // 1. Tạo callback ngẫu nhiên
+    const cb = 'cb_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
+    window[cb] = data => {
+      delete window[cb];
+      script.remove();
+      resolve(data);
+    };
+
+    // 2. Ghép URL với callback
+    const qs  = new URLSearchParams({ ...payload, action, callback: cb }).toString();
+    const url = SCRIPT_URL + '?' + qs;
+
+    // 3. Nạp bằng thẻ <script>
+    const script = document.createElement('script');
+    script.src   = url;
+    script.onerror = () => {
+      delete window[cb];
+      script.remove();
+      reject(new Error('JSONP load error'));
+    };
+    document.head.appendChild(script);
+  });
+}
+
 
   /* leaflet map */
   const map = L.map('map').setView([16,106],6);
