@@ -153,23 +153,22 @@ function timeAgo(t) {
 }
 
 /* ---------- Helper gọi Apps Script ---------- */
-/* ---------- Helper gọi Apps Script (JSONP) ---------- */
+/* ---------- Helper JSONP, bỏ hẳn fetch ---------- */
 function api(action, payload = {}) {
   return new Promise((resolve, reject) => {
-
     const cb = 'cb_' + Math.random().toString(36).slice(2);
-    payload = { ...payload, action, callback: cb };
 
-    const url = SCRIPT_URL + '?' + new URLSearchParams(payload);
+    // ghép query
+    const url = SCRIPT_URL + '?' +
+                new URLSearchParams({ ...payload, action, callback: cb });
 
-    // Tạo hàm callback toàn cục
+    // callback toàn cục
     window[cb] = data => {
       delete window[cb];
       script.remove();
-      resolve(data);              // trả kết quả
+      resolve(data);
     };
 
-    // Tạo <script> để nạp JSONP
     const script = document.createElement('script');
     script.src = url;
     script.onerror = () => {
@@ -177,10 +176,10 @@ function api(action, payload = {}) {
       script.remove();
       reject(new Error('JSONP load error'));
     };
-
     document.head.appendChild(script);
   });
 }
+
 
 
 function logErr(msg) {
