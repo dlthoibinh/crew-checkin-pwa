@@ -3,7 +3,7 @@
  ******************************************************************/
 
 const SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mx9b6mi3_9nUhp1sIOrKhYvNlTMcrjKo7kUbhcwxP--87Q/exec';
+  'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mxb96mi3_9nUhp1u5lrOKhYuNlTMcrjKJo7kUbhcwxP--87Q/exec';
 const SEND_EVERY = 15_000;
 const CLIENT_ID  =
   '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
