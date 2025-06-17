@@ -31,6 +31,7 @@ async function onGoogleSignIn({credential}){
   try{
     const email = decodeJwt(credential).email;
     const rs    = await api('login',{email});
+    console.log('LOGIN RESPONSE', rs);
     if(rs.status!=='ok'){ alert('Bạn không thuộc ca trực'); return; }
 
     me = rs;
