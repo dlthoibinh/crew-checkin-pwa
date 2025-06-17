@@ -2,26 +2,28 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Bản đồ giám sát vị trí ca trực</title>
 
-  <!-- Leaflet -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- 1) Leaflet (jsDelivr CDN gần VN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
 
   <style>
-    body{margin:0;font-family:sans-serif;background:#eef}
-    header{background:#0156a3;color:#fff;font-weight:700;font-size:22px;
-           padding:10px 16px;display:flex;align-items:center;gap:8px}
+    /* ======== layout ======== */
+    html,body{margin:0;height:100%;font-family:sans-serif;background:#eef}
+    body{display:flex;flex-direction:column}
+    header{background:#0156a3;color:#fff;font-size:22px;font-weight:700;display:flex;align-items:center;gap:8px;padding:10px 16px}
     header img{height:28px}
 
-    .filters{padding:8px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:#f4f6ff;border-bottom:1px solid #ccc}
+    .filters{padding:8px 16px;display:flex;flex-wrap:wrap;gap:16px;align-items:center;background:#f4f6ff;border-bottom:1px solid #ccd}
     .filters label{font-weight:500;display:flex;align-items:center;gap:4px}
     .filters input,.filters select{padding:4px 6px;font-size:14px}
-
-    #map{height:calc(100vh - 170px);width:100%}
+    .filters button{padding:6px 12px;font-size:14px}
     #report{margin-left:auto}
-    button{padding:6px 10px;font-size:14px}
+
+    /* map chiếm toàn bộ chiều còn lại */
+    #map{flex:1 1 auto}
   </style>
 </head>
 <body>
@@ -35,15 +37,12 @@
     <label>Công ty
       <select id="selComp"><option value="*">*</option></select>
     </label>
-
     <label>Đơn vị
       <select id="selUnit"><option value="*">*</option></select>
     </label>
-
     <label>Ca
       <select id="selShift"><option value="*">*</option></select>
     </label>
-
     <label>Nhân viên
       <select id="selEmp"><option value="*">*</option></select>
     </label>
@@ -52,10 +51,7 @@
       <input type="text" id="txtSearch" placeholder="Tên / email" />
     </label>
 
-    <label>
-      <input type="checkbox" id="ckActive" checked>
-      Đang trong ca
-    </label>
+    <label><input type="checkbox" id="ckActive" checked> Đang trong ca</label>
 
     <button id="btnReload">Lọc</button>
     <button id="report">Xuất CSV</button>
@@ -63,145 +59,123 @@
 
   <div id="map"></div>
 
-  <script>
-  /***** CONFIG *****/
+  <!-- Logic đặt defer để chắc chắn DOM đã tạo xong -->
+  <script defer>
+  /* ======== cấu hình ======== */
   const SCRIPT_URL =
     'https://script.google.com/macros/s/AKfycby3V7ojn7qWvxUds2r4f5mxb96mi3_9nUhp1u5lrOKhYuNlTMcrjKJo7kUbhcwxP--87Q/exec';
   const REFRESH_MS = 15_000;
 
-  /* helpers */
+  /* ---------- helpers ---------- */
   const $ = id => document.getElementById(id);
-  function timeAgo(t){
-    const d=(Date.now()-new Date(t).getTime())/1000;
+  const qs = (obj)=> new URLSearchParams(obj).toString();
+  const timeAgo = t => {
+    const d = (Date.now() - new Date(t).getTime())/1000;
     if(d<60) return d.toFixed(0)+' s';
     if(d<3600) return (d/60).toFixed(0)+' m';
     return (d/3600).toFixed(1)+' h';
-  }
-/* ---------- Helper gọi Apps Script (JSONP, tránh CORS) ---------- */
-function api(action, payload = {}) {
-  return new Promise((resolve, reject) => {
-    // 1. Tạo callback ngẫu nhiên
-    const cb = 'cb_' + Date.now().toString(36) + Math.random().toString(36).slice(2);
-    window[cb] = data => {
-      delete window[cb];
-      script.remove();
-      resolve(data);
-    };
+  };
 
-    // 2. Ghép URL với callback
-    const qs  = new URLSearchParams({ ...payload, action, callback: cb }).toString();
-    const url = SCRIPT_URL + '?' + qs;
-
-    // 3. Nạp bằng thẻ <script>
-    const script = document.createElement('script');
-    script.src   = url;
-    script.onerror = () => {
-      delete window[cb];
-      script.remove();
-      reject(new Error('JSONP load error'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
-
-  /* leaflet map */
-  const map = L.map('map').setView([16,106],6);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© OpenStreetMap'
-  }).addTo(map);
-
-  let allPos=[];
-
-  /* build lookup dropdowns */
-  async function initLookups(){
-    const rs = await api('getPositions',{});
-    if(rs.status!=='ok') return;
-    allPos = rs.positions;
-    fill($('#selComp'), [...new Set(allPos.map(p=>p.comp))]);
-    fill($('#selUnit'), [...new Set(allPos.map(p=>p.unit))]);
-    fill($('#selShift'),[...new Set(allPos.map(p=>p.ca))]);
-    fill($('#selEmp'),  [...new Set(allPos.map(p=>p.name))]);
-  }
-  function fill(sel,arr){
-    arr.filter(v=>v).sort().forEach(v=>{
-      const o=document.createElement('option');o.value=o.textContent=v;sel.appendChild(o);
+  /* ---- JSONP tránh CORS ---- */
+  function api(action, payload={}){
+    return new Promise((res,rej)=>{
+      const cb = 'cb_'+Date.now().toString(36)+Math.random().toString(36).slice(2);
+      window[cb]=data=>{ delete window[cb]; script.remove(); res(data); };
+      const script = document.createElement('script');
+      script.src   = SCRIPT_URL + '?' + qs({...payload, action, callback:cb});
+      script.onerror = ()=>{ delete window[cb]; script.remove(); rej('jsonp error'); };
+      document.head.appendChild(script);
     });
   }
 
-  /* sync dependent dropdowns */
-  function syncUnit(){
-    const comp=$('#selComp').value;
-    const units=[...new Set(allPos.filter(p=>comp==='*'||p.comp===comp).map(p=>p.unit))];
-    $('#selUnit').innerHTML='<option value="*">*</option>';fill($('#selUnit'),units);
-    syncShiftEmp();
-  }
-  function syncShiftEmp(){
-    const comp=$('#selComp').value,unit=$('#selUnit').value;
-    const list=allPos.filter(p=>
-      (comp==='*'||p.comp===comp)&&
-      (unit==='*'||p.unit===unit)
-    );
-    const shifts=[...new Set(list.map(p=>p.ca))];
-    const emps  =[...new Set(list.map(p=>p.name))];
-    $('#selShift').innerHTML='<option value="*">*</option>';fill($('#selShift'),shifts);
-    $('#selEmp').innerHTML  ='<option value="*">*</option>';fill($('#selEmp'),emps);
-  }
+  /* ---------- khởi tạo sau khi DOM & Leaflet đã sẵn ---------- */
+  window.addEventListener('DOMContentLoaded', async ()=>{
+    /* 1. map */
+    const map = L.map('map').setView([16,106],6);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© OpenStreetMap'
+    }).addTo(map);
 
-  $('#selComp').onchange=syncUnit;
-  $('#selUnit').onchange=syncShiftEmp;
+    let allPos = [];
 
-  /* draw markers */
-  async function loadPositions(){
-    const comp = $('#selComp').value;
-    const unit = $('#selUnit').value;
-    const ca   = $('#selShift').value;
-    const emp  = $('#selEmp').value;
-    const kw   = $('#txtSearch').value.trim().toLowerCase();
-    const active = $('#ckActive').checked;
-    const now=Date.now();
+    /* 2. hàm dựng dropdown */
+    const fill = (sel,arr)=>{
+      arr.filter(Boolean).sort().forEach(v=>{
+        const o=document.createElement('option');o.textContent=o.value=v;sel.appendChild(o);
+      });
+    };
 
-    const rs = await api('getPositions',{});
-    if(rs.status!=='ok') return;
-    allPos = rs.positions;
+    async function initLookups(){
+      const rs = await api('getPositions');
+      if(rs.status!=='ok') return;
+      allPos = rs.positions;
+      fill($('#selComp'),  [...new Set(allPos.map(p=>p.comp))]);
+      fill($('#selUnit'),  [...new Set(allPos.map(p=>p.unit))]);
+      fill($('#selShift'), [...new Set(allPos.map(p=>p.ca))]);
+      fill($('#selEmp'),   [...new Set(allPos.map(p=>p.name))]);
+    }
 
-    map.eachLayer(l=>{ if(l.options&&l.options.pane==='markerPane') map.removeLayer(l); });
+    function syncUnit(){
+      const comp = $('#selComp').value;
+      const units=[...new Set(allPos.filter(p=>comp==='*'||p.comp===comp).map(p=>p.unit))];
+      $('#selUnit').innerHTML='<option value="*">*</option>'; fill($('#selUnit'),units);
+      syncShiftEmp();
+    }
+    function syncShiftEmp(){
+      const comp=$('#selComp').value, unit=$('#selUnit').value;
+      const list=allPos.filter(p=> (comp==='*'||p.comp===comp) && (unit==='*'||p.unit===unit));
+      $('#selShift').innerHTML='<option value="*">*</option>'; fill($('#selShift'),[...new Set(list.map(p=>p.ca))]);
+      $('#selEmp').innerHTML  ='<option value="*">*</option>'; fill($('#selEmp'),  [...new Set(list.map(p=>p.name))]);
+    }
 
-    const bounds=[];
-    allPos.filter(p=>
-        (comp==='*'||p.comp===comp)&&
-        (unit==='*'||p.unit===unit)&&
-        (ca==='*'  ||p.ca===ca)&&
-        (emp==='*' ||p.name===emp)&&
-        (!active   ||(now-new Date(p.time).getTime())<3600*1000)&&
-        (kw===''   ||p.name.toLowerCase().includes(kw)||p.email.toLowerCase().includes(kw))
-    ).forEach(p=>{
-      L.marker([p.lat,p.lng]).addTo(map)
-        .bindTooltip(`${p.name}<br>${p.unit}<br>${p.ca}<br>${timeAgo(p.time)} trước`);
-      bounds.push([p.lat,p.lng]);
-    });
-    if(bounds.length) map.fitBounds(bounds,{padding:[16,16]});
-  }
+    $('#selComp').onchange = syncUnit;
+    $('#selUnit').onchange = syncShiftEmp;
 
-  /* export */
-  function exportCSV(){
-    if(!allPos.length){alert('Chưa có dữ liệu');return;}
-    const rows=[["email","name","unit","comp","ca","lat","lng","time"]];
-    allPos.forEach(p=>rows.push([p.email,p.name,p.unit,p.comp,p.ca,p.lat,p.lng,p.time]));
-    const csv=rows.map(r=>r.join(',')).join('\n');
-    const blob=new Blob([csv],{type:'text/csv'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');a.href=url;a.download='report.csv';a.click();URL.revokeObjectURL(url);
-  }
+    /* 3. vẽ marker */
+    async function loadPositions(){
+      const comp=$('#selComp').value, unit=$('#selUnit').value, ca=$('#selShift').value,
+            emp=$('#selEmp').value,   kw=$('#txtSearch').value.trim().toLowerCase(),
+            active=$('#ckActive').checked, now=Date.now();
 
-  $('#btnReload').onclick=loadPositions;
-  $('#report').onclick = exportCSV;
+      const rs = await api('getPositions');
+      if(rs.status!=='ok') return; allPos=rs.positions;
 
-  (async()=>{
+      map.eachLayer(l=>{ if(l.options && l.options.pane==='markerPane') map.removeLayer(l); });
+
+      const bounds=[];
+      allPos.filter(p=>
+           (comp==='*'||p.comp===comp) &&
+           (unit==='*'||p.unit===unit) &&
+           (ca==='*'  ||p.ca===ca) &&
+           (emp==='*' ||p.name===emp) &&
+           (!active   || now - new Date(p.time).getTime() < 3600*1000) &&
+           (kw===''   || p.name.toLowerCase().includes(kw) || p.email.toLowerCase().includes(kw))
+      ).forEach(p=>{
+        L.marker([p.lat,p.lng]).addTo(map)
+          .bindTooltip(`${p.name}<br>${p.unit}<br>${p.ca}<br>${timeAgo(p.time)} trước`);
+        bounds.push([p.lat,p.lng]);
+      });
+      if(bounds.length) map.fitBounds(bounds,{padding:[16,16]});
+    }
+
+    /* 4. export */
+    function exportCSV(){
+      if(!allPos.length){alert('Chưa có dữ liệu');return;}
+      const rows=[["email","name","unit","comp","ca","lat","lng","time"],...allPos.map(p=>[p.email,p.name,p.unit,p.comp,p.ca,p.lat,p.lng,p.time])];
+      const csv=rows.map(r=>r.join(',')).join('\n');
+      const blob=new Blob([csv],{type:'text/csv'});
+      const url=URL.createObjectURL(blob);
+      const a=document.createElement('a');a.href=url;a.download='report.csv';a.click();URL.revokeObjectURL(url);
+    }
+
+    $('#btnReload').onclick = loadPositions;
+    $('#report').onclick    = exportCSV;
+
+    /* 5. khởi động */
     await initLookups();
     await loadPositions();
     setInterval(loadPositions, REFRESH_MS);
-  })();
+  });
   </script>
 </body>
 </html>
