@@ -154,16 +154,19 @@ function timeAgo(t) {
 
 async function api(action, payload = {}) {
   const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
-  const r   = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+
+  const r = await fetch(url, { redirect: 'follow', cache: 'no-store' });
   if (!r.ok) throw new Error(`${action} → ${r.status}`);
 
   let txt = await r.text();
 
-  // Google chống XSSI: )]}'\n  (5 ký tự) => bỏ toàn bộ dòng đầu
-  if (txt.startsWith(")]}'")) txt = txt.substring(txt.indexOf('\n') + 1);
+  /* Google thêm tiền tố chống XSSI:  )]}'  HOẶC  )]}"}  HOẶC  )]}',\n…
+     → cắt TẤT CẢ ký tự không phải { hoặc [ ở đầu chuỗi                       */
+  txt = txt.replace(/^[^\[\{]+/, '');
 
   return JSON.parse(txt);
 }
+
 
 function logErr(msg) {
   const sep = SCRIPT_URL.includes('?') ? '&' : '?';
