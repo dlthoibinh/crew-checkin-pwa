@@ -70,14 +70,37 @@ function restoreShift(){
   }
 }
 
-async function startShift(){
-  const rs = await api('startShift', { email:me.email });
-  if(rs.status==='ok'){
-    shiftActive = true;
-    uiShift();
-    beginGeo();
-  }else alert('Không thể bắt đầu ca!');
+/* ---------- Bắt đầu ca ---------- */
+async function startShift() {
+  try {
+    // 1. Lấy mã Ca
+    //    – nếu có dropdown id="selCa" → lấy giá trị người dùng chọn
+    //    – nếu không, dùng me.ca đã đọc từ sheet nhân viên (login)
+    const caSel = byId('selCa')
+                    ? byId('selCa').value           // CA01 / CA02 …
+                    : (me.ca || '');
+
+    // 2. Gọi server lưu ca + mở ca
+    const rs = await api('startShift', {
+      email: me.email,
+      ca   : caSel                // gửi kèm mã ca
+    });
+
+    // 3. Xử lý kết quả
+    if (rs.status === 'ok') {
+      shiftActive = true;
+      me.ca = caSel;              // lưu lại trong client (nếu cần hiển thị)
+      uiShift();                  // đổi giao diện nút
+      beginGeo();                 // bắt đầu gửi GPS
+    } else {
+      alert('Không thể bắt đầu ca!');
+    }
+  } catch (err) {
+    logErr(err);
+    alert('Có lỗi khi bắt đầu ca, thử lại!');
+  }
 }
+
 
 async function endShift(){
   const rs = await api('endShift', { email:me.email });
