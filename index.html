@@ -5,22 +5,22 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>Check in Ca trực</title>
 
-  <!-- Leaflet (bỏ integrity để tránh chặn) -->
+  <!-- Leaflet (bỏ integrity để tránh Chrome chặn) -->
   <link rel="stylesheet"
         href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Google Identity Services -->
+  <!-- Google Identity Services phải đứng TRƯỚC app.js -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
   <style>
-    body{margin:0;font-family:sans-serif;background:#eef;}
-    header{background:#0156a3;color:#fff;padding:16px;font-size:28px;
-           font-weight:700;display:flex;align-items:center;gap:8px}
+    body{margin:0;font-family:sans-serif;background:#eef}
+    header{background:#0156a3;color:#fff;font-size:28px;font-weight:700;
+           padding:16px;display:flex;align-items:center;gap:8px}
     header img{height:32px}
     #loginSec{padding:16px}
-    #map{height:calc(100vh - 96px);width:100%;display:block}
-    button{padding:8px 16px;margin:4px 0}
+    #map{height:calc(100vh - 120px);width:100%}
+    button,select{padding:8px 16px;margin:4px 4px 4px 0;font-size:14px}
   </style>
 </head>
 <body>
@@ -29,24 +29,36 @@
     <span>Check in Ca trực</span>
   </header>
 
-  <!-- Đăng nhập -->
+  <!-- Khối đăng nhập -->
   <section id="loginSec">
     <div id="gSignIn"></div>
   </section>
 
   <!-- Ứng dụng chính -->
   <section id="app" hidden>
-    <p id="welcome" style="padding:8px 16px 0 16px"></p>
-    <div style="padding:8px 16px">
+    <p id="welcome" style="padding:8px 16px 0"></p>
+
+    <div style="padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
+      <!-- Chọn ca (tuỳ chọn) -->
+      <label>
+        Ca&nbsp;
+        <select id="selCa">
+          <option value="CA01">CA01</option>
+          <option value="CA02">CA02</option>
+          <option value="CA03">CA03</option>
+        </select>
+      </label>
+
       <button id="btnStart">Bắt đầu ca</button>
       <button id="btnEnd" hidden>Kết thúc ca</button>
       <button id="btnInfo">Thông tin</button>
       <button id="btnLogout">Đăng xuất</button>
     </div>
+
     <div id="map"></div>
   </section>
 
-  <!-- Logic -->
+  <!-- Logic – đặt cuối trang -->
   <script src="app.js?v=20240618e"></script>
 </body>
 </html>
