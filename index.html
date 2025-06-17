@@ -1,64 +1,52 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-
   <title>Check in Ca trực</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icon-192.png" />
 
-  <!-- Styles -->
-  <link rel="stylesheet" href="style.css" />
+  <!-- Leaflet (bỏ integrity để tránh chặn) -->
+  <link rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <!-- Google Identity script -->
+  <!-- Google Identity Services -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
-  <!-- Leaflet CSS (bản đồ)-->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    integrity="sha256-sA+4JpQDRkz0Ecp0/nt7UyTz5WgGIHkI54o8BE1Bjtk="
-    crossorigin=""
-  />
+  <style>
+    body{margin:0;font-family:sans-serif;background:#eef;}
+    header{background:#0156a3;color:#fff;padding:16px;font-size:28px;
+           font-weight:700;display:flex;align-items:center;gap:8px}
+    header img{height:32px}
+    #loginSec{padding:16px}
+    #map{height:calc(100vh - 96px);width:100%;display:block}
+    button{padding:8px 16px;margin:4px 0}
+  </style>
 </head>
-
 <body>
-  <!-- Thanh tiêu đề -->
-  <header class="topbar">
-    <img src="evn_logo.png" height="32" alt="EVN" />
-    <h1>Check in Ca trực</h1>
+  <header>
+    <img src="./evn_logo.png" alt="EVN" />
+    <span>Check in Ca trực</span>
   </header>
 
-  <!-- Vùng nút đăng nhập Google -->
+  <!-- Đăng nhập -->
   <section id="loginSec">
-    <!-- nút sẽ được JS “google.accounts.id.renderButton” vẽ vào -->
     <div id="gSignIn"></div>
   </section>
 
-  <!-- Ứng dụng chính (ẩn cho tới khi đăng nhập) -->
-  <main id="app" hidden>
-    <p id="welcome"></p>
+  <!-- Ứng dụng chính -->
+  <section id="app" hidden>
+    <p id="welcome" style="padding:8px 16px 0 16px"></p>
+    <div style="padding:8px 16px">
+      <button id="btnStart">Bắt đầu ca</button>
+      <button id="btnEnd" hidden>Kết thúc ca</button>
+      <button id="btnInfo">Thông tin</button>
+      <button id="btnLogout">Đăng xuất</button>
+    </div>
+    <div id="map"></div>
+  </section>
 
-    <button id="btnStart">Bắt đầu ca</button>
-    <button id="btnEnd"   hidden>Kết thúc ca</button>
-    <button id="btnInfo">Thông tin nhân viên</button>
-    <button id="btnLogout">Đăng xuất</button>
-
-    <section id="mapSec" hidden>
-      <h2>Vị trí thời gian thực</h2>
-      <div id="map" style="height:400px;"></div>
-    </section>
-  </main>
-
-  <!-- JS chính của ứng dụng -->
-  <script src="app.js"></script>
-
-  <!-- Leaflet JS -->
-  <script
-    src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-    integrity="sha256-o9N1jLF6C9odNj/imiSM39Y+35xb94pFfclJ90Rk0Po="
-    crossorigin=""
-  ></script>
+  <!-- Logic -->
+  <script src="app.js?v=20240618e"></script>
 </body>
 </html>
