@@ -2,28 +2,37 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Check in Ca trực</title>
 
-  <!-- Leaflet (bỏ integrity để tránh Chrome chặn) -->
-  <link rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- ─────── 1. kết nối sớm tới CDN quan trọng ─────── -->
+  <link rel="preconnect" href="https://accounts.google.com">
+  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
 
-  <!-- Google Identity Services phải đứng TRƯỚC app.js -->
+  <!-- 2. Leaflet local‑cache (JSDelivr gần VN) -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js" defer></script>
+
+  <!-- 3. Google Identity Services (bắt buộc BEFORE app.js) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
 
+  <!-- Spinner / skeleton while chờ CDN tải -->
   <style>
-    body{margin:0;font-family:sans-serif;background:#eef}
-    header{background:#0156a3;color:#fff;font-size:28px;font-weight:700;
-           padding:16px;display:flex;align-items:center;gap:8px}
+    :root{--evn-blue:#0156a3}
+    *{box-sizing:border-box}body{margin:0;font-family:sans-serif;background:#eef}
+    header{background:var(--evn-blue);color:#fff;font-size:28px;font-weight:700;padding:16px;display:flex;align-items:center;gap:8px}
     header img{height:32px}
     #loginSec{padding:16px}
-    #map{height:calc(100vh - 120px);width:100%}
+    #map{height:calc(100vh - 120px);width:100%;display:none}
     button,select{padding:8px 16px;margin:4px 4px 4px 0;font-size:14px}
+    #loading{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#eef;z-index:9999}
+    .lds{width:64px;height:64px;border:8px solid #999;border-top-color:var(--evn-blue);border-radius:50%;animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
   </style>
 </head>
 <body>
+  <!-- Loading overlay -->
+  <div id="loading"><div class="lds"></div></div>
+
   <header>
     <img src="./evn_logo.png" alt="EVN" />
     <span>Check in Ca trực</span>
@@ -37,28 +46,23 @@
   <!-- Ứng dụng chính -->
   <section id="app" hidden>
     <p id="welcome" style="padding:8px 16px 0"></p>
-
     <div style="padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
-      <!-- Chọn ca (tuỳ chọn) -->
-      <label>
-        Ca&nbsp;
+      <label>Ca&nbsp;
         <select id="selCa">
           <option value="CA01">CA01</option>
           <option value="CA02">CA02</option>
           <option value="CA03">CA03</option>
         </select>
       </label>
-
       <button id="btnStart">Bắt đầu ca</button>
       <button id="btnEnd" hidden>Kết thúc ca</button>
       <button id="btnInfo">Thông tin</button>
       <button id="btnLogout">Đăng xuất</button>
     </div>
-
     <div id="map"></div>
   </section>
 
-  <!-- Logic – đặt cuối trang -->
-  <script src="app.js?v=20240618e"></script>
+  <!-- 4. Logic (defer để tải song song nhưng chạy sau GIS) -->
+  <script src="app.js" defer onload="document.getElementById('loading').style.display='none'"></script>
 </body>
 </html>
