@@ -152,21 +152,18 @@ function timeAgo(t) {
   return `${(d / 3600).toFixed(1)} h trước`;
 }
 
-/* ---------- Helper gọi Apps Script ---------- */
-/* ---------- Helper gọi Apps Script (vẫn dùng fetch) ---------- */
 async function api(action, payload = {}) {
   const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
-
-  const r = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  const r   = await fetch(url, { redirect: 'follow', cache: 'no-store' });
   if (!r.ok) throw new Error(`${action} → ${r.status}`);
 
-  // Google đôi khi thêm ")]}'\n" để chống XSSI
   let txt = await r.text();
-  if (txt.startsWith(")]}'")) txt = txt.slice(4);   // cắt tiền tố
+
+  // Google chống XSSI: )]}'\n  (5 ký tự) => bỏ toàn bộ dòng đầu
+  if (txt.startsWith(")]}'")) txt = txt.substring(txt.indexOf('\n') + 1);
+
   return JSON.parse(txt);
 }
-
-
 
 function logErr(msg) {
   const sep = SCRIPT_URL.includes('?') ? '&' : '?';
