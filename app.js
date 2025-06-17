@@ -153,31 +153,17 @@ function timeAgo(t) {
 }
 
 /* ---------- Helper gọi Apps Script ---------- */
-/* ---------- Helper JSONP, bỏ hẳn fetch ---------- */
-function api(action, payload = {}) {
-  return new Promise((resolve, reject) => {
-    const cb = 'cb_' + Math.random().toString(36).slice(2);
+/* ---------- Helper gọi Apps Script (vẫn dùng fetch) ---------- */
+async function api(action, payload = {}) {
+  const url = SCRIPT_URL + '?' + new URLSearchParams({ ...payload, action });
 
-    // ghép query
-    const url = SCRIPT_URL + '?' +
-                new URLSearchParams({ ...payload, action, callback: cb });
+  const r = await fetch(url, { redirect: 'follow', cache: 'no-store' });
+  if (!r.ok) throw new Error(`${action} → ${r.status}`);
 
-    // callback toàn cục
-    window[cb] = data => {
-      delete window[cb];
-      script.remove();
-      resolve(data);
-    };
-
-    const script = document.createElement('script');
-    script.src = url;
-    script.onerror = () => {
-      delete window[cb];
-      script.remove();
-      reject(new Error('JSONP load error'));
-    };
-    document.head.appendChild(script);
-  });
+  // Google đôi khi thêm ")]}'\n" để chống XSSI
+  let txt = await r.text();
+  if (txt.startsWith(")]}'")) txt = txt.slice(4);   // cắt tiền tố
+  return JSON.parse(txt);
 }
 
 
