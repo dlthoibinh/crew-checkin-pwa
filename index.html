@@ -1,78 +1,26 @@
 <!DOCTYPE html>
 <html lang="vi">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Check-in Ca trực</title>
-
-  <!-- CDN bắt buộc -->
-  <link rel="preconnect" href="https://accounts.google.com">
-  <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
-
-  <!-- Leaflet -->
-  <link rel="stylesheet"
-        href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"
-          defer></script>
-
-  <!-- Giao diện gọn nhẹ -->
-  <style>
-    :root{--evn:#0156a3}
-    *{box-sizing:border-box;margin:0}
-    body{font-family:sans-serif;background:#eef}
-    header{background:var(--evn);color:#fff;font-weight:700;
-           font-size:28px;display:flex;align-items:center;gap:8px;padding:16px}
-    header img{height:32px}
-    #loading{position:fixed;inset:0;display:flex;align-items:center;
-             justify-content:center;background:#eef;z-index:9999}
-    .lds{width:64px;height:64px;border:8px solid #999;border-top-color:var(--evn);
-         border-radius:50%;animation:spin 1s linear infinite}
-    @keyframes spin{to{transform:rotate(360deg)}}
-    button,select{padding:8px 16px;margin:4px 4px 4px 0;font-size:14px}
-    #map{height:calc(100vh - 120px);display:none}
-  </style>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Check in Ca trực</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <script src="app.js" defer></script>
 </head>
 <body>
-<!-- loading spinner -->
-<div id="loading"><div class="lds"></div></div>
+  <header>Check in Ca trực</header>
 
-<header>
-  <img src="./evn_logo.png" alt="EVN">
-  <span>Check in Ca trực</span>
-</header>
+  <section id="loginSec">
+    <div id="gSignIn"></div>
+  </section>
 
-<!-- Khối đăng nhập -->
-<section id="loginSec">
-  <!-- GIS sẽ render nút vào đây -->
-  <div id="gSignIn"></div>
-</section>
-
-<!-- Ứng dụng chính -->
-<section id="app" hidden>
-  <p id="welcome" style="padding:8px 16px 0"></p>
-
-  <div style="padding:8px 16px;display:flex;flex-wrap:wrap;align-items:center;gap:8px">
-    <label>Ca&nbsp;
-      <select id="selCa">
-        <option value="CA01">CA01</option>
-        <option value="CA02">CA02</option>
-        <option value="CA03">CA03</option>
-      </select>
-    </label>
+  <section id="app" hidden>
+    <p id="welcome"></p>
     <button id="btnStart">Bắt đầu ca</button>
     <button id="btnEnd" hidden>Kết thúc ca</button>
     <button id="btnInfo">Thông tin</button>
     <button id="btnLogout">Đăng xuất</button>
-  </div>
-
-  <div id="map"></div>
-</section>
-
-<!-- Google Identity Services v2 -->
-<script src="https://accounts.google.com/gsi/client" async defer></script>
-
-<!-- Logic chính -->
-<script src="app.js" defer
-        onload="document.getElementById('loading').remove()"></script>
+  </section>
 </body>
 </html>
