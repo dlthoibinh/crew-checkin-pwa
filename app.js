@@ -4,7 +4,7 @@
 
 /* 1️⃣ CẤU HÌNH */
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykV_rM5_qD58eKqncGZam6UbEnadXWEoDVOzfQXyUtpfSp8LNXLy4c6TL0YEe4b_gBdQ/exec';
-const CLIENT_ID  = '280769604046-nq14unfhu36e1fc86vk6dgj9br5df2.apps.googleusercontent.com';
+const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 const SEND_EVERY = 15_000;
 
 /* 2️⃣ BIẾN TOÀN CỤC */
