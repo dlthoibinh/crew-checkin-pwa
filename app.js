@@ -1,172 +1,131 @@
-/***********************************************************************************************
- *  Front-end PWA – Check-in Ca trực (EVN)                                                      *
- *  - Đăng nhập bằng Google (GIS)
- *  - Khi email nằm trong sheet "nhanvien" → cho bắt đầu ca
- *  - Gửi GPS 15 s/lần vào sheet "log" (Apps Script backend)
- *  - Khôi phục ca nếu refresh / kill app
- *  - Toàn bộ lỗi → gọi action=error để ghi sheet "loi"
- *  - Dashboard (dashboard.html) cùng dùng api() JSONP nên không cần gì thêm
- **********************************************************************************************/
+/******************************************************************
+ *  Check-in Ca trực – Front-end PWA  (GPS + JSONP, v2024-06-17)
+ ******************************************************************/
 
-/* ============ CONFIG ============ */
-const SCRIPT_URL =
-  'https://script.google.com/macros/s/AKfycbykV_rM5_qD58eKqncGZam6UbEnadXWEoDVOzfQXyUtpfSp8LNXLy4c6TL0YEe4b_gBdQ/exec';
-const SEND_EVERY = 15_000;                    // 15 s
-const CLIENT_ID  =
-  '280769604046-nq14unfhu36e1fc86vk6d3l9br5df2.apps.googleusercontent.com';
+/* 1️⃣ CẤU HÌNH */
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykV_rM5_qD58eKqncGZam6UbEnadXWEoDVOzfQXyUtpfSp8LNXLy4c6TL0YEe4b_gBdQ/exec';
+const CLIENT_ID  = '280769604046-nq14unfhu36e1fc86vk6dgj9br5df2.apps.googleusercontent.com';
+const SEND_EVERY = 15_000;
 
-/* ============ DOM helper ============ */
-const $  = id => document.getElementById(id);
-const qs = o => new URLSearchParams(o).toString();
+/* 2️⃣ BIẾN TOÀN CỤC */
+let me={}, shiftActive=false, watchID=null, timer=null, map;
 
-/* ============ State ============ */
-let me={}, shiftActive=false, watchID=null, timer=null, map, markers=[];
+/* 3️⃣ HELPER DOM & LOG */
+const $ = sel => document.querySelector(sel);
+function logErr(msg){
+  fetch(`${SCRIPT_URL}?action=error&email=${encodeURIComponent(me.email||'')}`
+        +`&message=${encodeURIComponent(msg)}`).catch(()=>{});
+  console.error(msg);
+}
 
-/*
-════════════════════════════════════════════════════════════════════
-  1️⃣  CHẠY SAU KHI DOM HOÀN TẤT
-════════════════════════════════════════════════════════════════════ */
-window.addEventListener('DOMContentLoaded',()=>{
-  /* 1. Khởi tạo Google Identity */
-  const signDiv = $('#gSignIn');
-  if(signDiv){
-    google.accounts.id.initialize({client_id:CLIENT_ID,callback:onGoogleSignIn});
-    google.accounts.id.renderButton(signDiv,{theme:'outline',size:'large'});
-  }else console.error('#gSignIn not found');
+/* 4️⃣ ĐỢI DOMContentLoaded – đảm bảo #gSignIn tồn tại */
+document.addEventListener('DOMContentLoaded', () => {
+  if(!$('#gSignIn')) return logErr('#gSignIn not found');
 
-  /* 2. Gắn các sự kiện nút – đảm bảo lúc này phần tử đã có */
-  $('#btnStart') && ($('#btnStart').onclick  = startShift);
-  $('#btnEnd')   && ($('#btnEnd').onclick    = endShift);
-  $('#btnInfo')  && ($('#btnInfo').onclick   = ()=>alert(JSON.stringify(me,null,2)));
-  $('#btnLogout')&& ($('#btnLogout').onclick = ()=>location.reload());
+  /* 5️⃣ KHỞI TẠO Google Identity */
+  google.accounts.id.initialize({ client_id:CLIENT_ID, callback:onGoogleSignIn });
+  google.accounts.id.renderButton($('#gSignIn'),
+    { theme:'outline', size:'large', width:240 });
 
-  /* 3. Khôi phục ca & bản đồ (nếu đã từng đăng nhập và có shiftActive) */
+  /* 6️⃣ GẮN SỰ KIỆN NÚT; kiểm tra null để tránh lỗi */
+  $('#btnStart')?.addEventListener('click', startShift);
+  $('#btnEnd')  ?.addEventListener('click',  endShift);
+  $('#btnInfo') ?.addEventListener('click', () => alert(JSON.stringify(me,null,2)));
+  $('#btnLogout')?.addEventListener('click', () => location.reload());
+
+  /* 7️⃣ PHỤC HỒI CA NẾU LOCALSTORAGE CÓ */
   if(localStorage.getItem('shiftActive')==='1'){
-    shiftActive=true; uiShift();
+    shiftActive=true;
+    beginGPS();
   }
 });
 
-/*
-════════════════════════════════════════════════════════════════════
-  2️⃣  GOOGLE SIGN-IN
-════════════════════════════════════════════════════════════════════ */
+/* 8️⃣ LOGIN GOOGLE */
 async function onGoogleSignIn({credential}){
   try{
-    /* Giải mã JWT */
     const email = JSON.parse(atob(credential.split('.')[1])).email.toLowerCase();
-
-    /* Gọi backend */
     const rs = await api('login',{email});
-    console.log('LOGIN RESPONSE',rs);
+    console.log('LOGIN RESPONSE', rs);
 
     if(rs.status!=='ok') return alert('Bạn không thuộc ca trực');
 
-    me = rs;  // lưu thông tin nhân viên
-    $('#loginSec').hidden = true;
-    $('#app').hidden      = false;
+    /* thành công */
+    me = rs;
+    $('#loginSec').hidden=true;
+    $('#app').hidden=false;
     $('#welcome').textContent = `Xin chào ${me.name} (${me.unit})`;
 
-    /* Bản đồ & ca trực */
-    initMap();
-    restoreShift();
-  }catch(err){ logErr(err); alert('Đăng nhập lỗi'); }
+  }catch(e){ logErr(e); alert('Đăng nhập lỗi'); }
 }
 
-/*
-════════════════════════════════════════════════════════════════════
-  3️⃣  CA TRỰC – START / END / KHÔI PHỤC
-════════════════════════════════════════════════════════════════════ */
-function restoreShift(){
-  if(shiftActive){ beginGPS(); return; }
-  if(localStorage.getItem('shiftActive')==='1'){
-    shiftActive=true; uiShift(); beginGPS();
-  }
-}
+/* 9️⃣ SHIFT */
 async function startShift(){
   try{
-    const ca=$('#selCa').value;
-    const rs=await api('startShift',{email:me.email,ca});
-    if(rs.status==='ok'){ shiftActive=true; uiShift(); beginGPS(); }
-    else alert('Không thể bắt đầu ca');
-  }catch(e){logErr(e); alert('Lỗi!');}
+    const ca = $('#selCa')?.value || me.ca || '';
+    const rs = await api('startShift',{email:me.email, ca});
+    if(rs.status==='ok'){
+      shiftActive=true; localStorage.setItem('shiftActive','1');
+      $('#btnStart').hidden=true; $('#btnEnd').hidden=false;
+      beginGPS();
+    }
+  }catch(e){ logErr(e); alert('Không thể bắt đầu ca'); }
 }
 async function endShift(){
   try{
-    const rs=await api('endShift',{email:me.email});
-    if(rs.status==='ok'){ shiftActive=false; uiShift(); stopGPS(); }
-    else alert('Không thể kết thúc ca');
-  }catch(e){logErr(e); alert('Lỗi!');}
-}
-function uiShift(){
-  if(!$('#btnStart')) return;               // an toàn nếu DOM chưa có
-  $('#btnStart').hidden = shiftActive;
-  $('#btnEnd').hidden   = !shiftActive;
-  $('#map').style.display = shiftActive?'block':'none';
-  localStorage.setItem('shiftActive', shiftActive?'1':'0');
+    const rs = await api('endShift',{email:me.email});
+    if(rs.status==='ok'){
+      shiftActive=false; localStorage.removeItem('shiftActive');
+      $('#btnStart').hidden=false; $('#btnEnd').hidden=true;
+      stopGPS();
+    }
+  }catch(e){ logErr(e); alert('Không thể kết thúc ca'); }
 }
 
-/*
-════════════════════════════════════════════════════════════════════
-  4️⃣  BẢN ĐỒ (Leaflet) + MARKERS
-════════════════════════════════════════════════════════════════════ */
+/* 🔟 MAP & GPS */
 function initMap(){
-  if(map) return;                           // tránh khởi tạo 2 lần
   map = L.map('map').setView([16,106],6);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      {attribution:'© OpenStreetMap'}).addTo(map);
+    {attribution:'© OpenStreetMap'}).addTo(map);
 }
-function addMarker(p){
-  const m=L.marker([p.lat,p.lng]).addTo(map)
-      .bindTooltip(`${p.name}<br>${p.unit}<br>${p.ca}<br>${timeAgo(p.time)} trước`,{direction:'top'});
-  markers.push(m);
-}
-function clearMarkers(){ markers.forEach(m=>map.removeLayer(m)); markers.length=0; }
-function timeAgo(t){const d=(Date.now()-new Date(t))/1000;return d<60?d.toFixed(0)+' s':d<3600?(d/60).toFixed(0)+' m':(d/3600).toFixed(1)+' h';}
-
-/*
-════════════════════════════════════════════════════════════════════
-  5️⃣  GPS: GỬI & TẢI VỊ TRÍ
-════════════════════════════════════════════════════════════════════ */
 function beginGPS(){
-  if(!navigator.geolocation){alert('Trình duyệt không hỗ trợ GPS'); return;}
-  watchID=navigator.geolocation.watchPosition(sendPos,e=>logErr(e.message),{enableHighAccuracy:true,maximumAge:0,timeout:10_000});
-  timer=setInterval(loadPos,SEND_EVERY);
+  if(!navigator.geolocation){ alert('Trình duyệt không hỗ trợ GPS'); return; }
+  $('#map').style.display='block'; if(!map) initMap();
+
+  watchID = navigator.geolocation.watchPosition(
+    pos => api('log',{email:me.email,
+                      lat:pos.coords.latitude,
+                      lng:pos.coords.longitude,
+                      time:new Date().toISOString()}),
+    err => logErr(err.message),
+    {enableHighAccuracy:true, maximumAge:0, timeout:10_000}
+  );
+  timer = setInterval(loadPos, SEND_EVERY);
   loadPos();
 }
-function stopGPS(){ navigator.geolocation.clearWatch(watchID); clearInterval(timer); clearMarkers(); }
-async function sendPos(pos){
-  const {latitude:lat,longitude:lng}=pos.coords;
-  await api('log',{email:me.email,lat,lng,time:new Date().toISOString()});
-}
+function stopGPS(){ navigator.geolocation.clearWatch(watchID); clearInterval(timer); }
+
 async function loadPos(){
-  const rs = await api('getPositions'); if(rs.status!=='ok') return;
-  clearMarkers(); const b=[];
-  rs.positions.forEach(p=>{addMarker(p); b.push([p.lat,p.lng]);});
-  if(b.length) map.fitBounds(b,{padding:[16,16]});
+  const rs = await api('getPositions');
+  if(rs.status!=='ok') return;
+  /* xoá marker cũ */
+  map.eachLayer(l=>{ if(l.options && l.options.pane==='markerPane') map.removeLayer(l); });
+  const b=[];
+  rs.positions.forEach(p=>{
+    L.marker([p.lat,p.lng]).addTo(map)
+     .bindTooltip(`${p.name}<br>${p.unit}<br>${p.ca}`);
+    b.push([p.lat,p.lng]);
+  });
+  if(b.length) map.fitBounds(b,{padding:[24,24]});
 }
 
-/*
-════════════════════════════════════════════════════════════════════
-  6️⃣  Chia sẻ & Dẫn đường – tuỳ chọn
-════════════════════════════════════════════════════════════════════ */
-function shareZalo(){ window.open('https://zalo.me/share?url='+encodeURIComponent(location.href),'_blank'); }
-function navToHere(lat,lng){ window.open(`https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`,'_blank'); }
-
-/*
-════════════════════════════════════════════════════════════════════
-  7️⃣  JSONP CALLER + GHI LOG LỖI
-════════════════════════════════════════════════════════════════════ */
+/* ⓫ JSONP CALL */
 function api(action,payload={}){
   return new Promise((res,rej)=>{
-    const cb='cb_'+Math.random().toString(36).slice(2);
-    window[cb]=d=>{delete window[cb]; res(d);}  // clean up
-    const s=document.createElement('script');
-    s.src=SCRIPT_URL+'?'+qs({...payload,action,callback:cb});
-    s.onerror=()=>{delete window[cb]; rej('jsonp');};
-    document.head.appendChild(s);
+    const cb='cb_'+Date.now().toString(36);
+    window[cb]=d=>{ delete window[cb]; script.remove(); res(d); };
+    const script=document.createElement('script');
+    script.src=SCRIPT_URL + '?' + new URLSearchParams({...payload, action, callback:cb});
+    script.onerror=()=>{ delete window[cb]; script.remove(); rej('jsonp error'); };
+    document.head.appendChild(script);
   });
-}
-function logErr(msg){
-  fetch(SCRIPT_URL+'?'+qs({action:'error',email:me.email||'',message:String(msg)})).catch(()=>{});
-  console.error(msg);
 }
