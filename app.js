@@ -118,14 +118,22 @@ async function loadPos(){
   if(b.length) map.fitBounds(b,{padding:[24,24]});
 }
 
-/* ⓫ JSONP CALL */
-function api(action,payload={}){
-  return new Promise((res,rej)=>{
-    const cb='cb_'+Date.now().toString(36);
-    window[cb]=d=>{ delete window[cb]; script.remove(); res(d); };
-    const script=document.createElement('script');
-    script.src=SCRIPT_URL + '?' + new URLSearchParams({...payload, action, callback:cb});
-    script.onerror=()=>{ delete window[cb]; script.remove(); rej('jsonp error'); };
-    document.head.appendChild(script);
+// Hàm gọi JSONP chung
+function callJSONP(params, onDone){
+  const cb = 'cb_' + Date.now();
+  window[cb] = d => { delete window[cb]; onDone(d); };
+  const s   = document.createElement('script');
+  s.src     = `${SCRIPT_URL}?${params}&callback=${cb}`;
+  s.onerror = () => { alert('jsonp error'); };
+  document.body.appendChild(s);
+}
+
+// Đăng nhập
+function tryLogin(email){
+  callJSONP(`action=login&email=${encodeURIComponent(email)}`, rs=>{
+    console.log('LOGIN RESPONSE', rs);
+    if(rs.status==='ok'){
+        // hiển thị lời chào + show form ca trực
+    }else alert('Bạn không phải nhân viên ca trực');
   });
 }
