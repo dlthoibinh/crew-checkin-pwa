@@ -33,7 +33,8 @@ window.onload = () => {
     auto_select: false
   });
   google.accounts.id.prompt();          // hiển thị pop-up OneTap
-  google.accounts.id.renderButton($('#gSignIn'), { theme:'outline', size:'large' });
+  google.accounts.id.renderButton($('gSignIn'),  // KHÔNG có dấu #
+  {theme:'outline', size:'large', width:260});
 };
 
 function decodeJwt(token){           // lấy email ra từ JWT
