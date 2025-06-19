@@ -1,5 +1,5 @@
 // 1. Thay URL & Client ID của bạn vào đây
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykV_rM5_qD58eKqncGZam6UbEnadXWEoDVOzfQXyUtpfSp8LNXLy4c6TL0YEe4b_gBdQ/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxNwP7WG77tFYs8CRz6-e9-HwueWDo3m62BgWnSiHju/exec';
 const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
 
 let me = {};
