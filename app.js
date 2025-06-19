@@ -1,111 +1,87 @@
-// 1. Thay URL & Client ID của bạn vào đây
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxNwP7WG77tFYs8CRz6-e9-HwueWDo3m62BgWnSiHju/exec';
-const CLIENT_ID  = '280769604046-nq14unfhiu36e1fc86vk6d6qj9br5df2.apps.googleusercontent.com';
+/*  app.js – v2 (5 giây)  */
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwkHtj3CD_QGhPmxZ7H8uYYgnDZIgOYAp84DyoCetV4UdRe8XXOu015U2nLd0h7csUgCw/exec';          // 👈
 
-let me = {};
+/* ─────────── DOM helper ─────────── */
+const $ = id => document.getElementById(id);
+const status = msg => $('status').textContent = msg;
 
-// 2. Khởi tạo Google Sign-in
-window.addEventListener('DOMContentLoaded', ()=>{
-  google.accounts.id.initialize({
-    client_id: CLIENT_ID,
-    callback: onGoogleSignIn
+/* ─────────── 1. Tải danh sách đơn vị & nhân viên ─────────── */
+function jsonp(url, cb){
+  const s  = document.createElement('script');
+  const fn = '_cb'+Date.now()+Math.random().toString(36).slice(2);
+  window[fn] = res => { delete window[fn]; s.remove(); cb(res); };
+  s.src = url + (url.includes('?')?'&':'?') + 'callback='+fn;
+  s.dataset.jsonp = 1;
+  document.body.appendChild(s);
+}
+function loadUnits(){
+  jsonp(WEB_APP_URL+'?list=units', res=>{
+    if (res.status!=='OK') return alert('API units lỗi');    // đơn giản
+    $('unit').innerHTML = '<option value="">— Đơn vị —</option>'
+      + res.rows.map(u=>`<option>${u}</option>`).join('');
   });
-  google.accounts.id.renderButton(
-    document.getElementById('gSignIn'),
-    { theme:'outline', size:'large', width:260 }
+}
+function loadEmployees(unit){
+  $('emp').innerHTML = '<option value="">Đang tải…</option>';
+  jsonp(WEB_APP_URL+`?list=employees&unit=${encodeURIComponent(unit)}`, res=>{
+    if (res.status!=='OK') return alert('API employees lỗi');
+    $('emp').innerHTML = '<option value="">— Nhân viên —</option>'
+      + res.rows.map(e=>`<option>${e}</option>`).join('');
+  });
+}
+
+/* ─────────── 2. Gửi vị trí ─────────── */
+function sendLocation(unit, emp, shift, lat, lon){
+  jsonp(
+    WEB_APP_URL
+    + `?unit=${encodeURIComponent(unit)}`
+    + `&emp=${encodeURIComponent(emp)}`
+    + `&shift=${encodeURIComponent(shift)}`
+    + `&lat=${lat}&lon=${lon}`,
+    res=>{
+      console.log('←',res);
+      status(res.status==='OK' ? '✅ Đã gửi' : '❌ Server lỗi');
+    }
   );
-});
-
-// 3. Giải mã JWT để lấy email
-function decodeJwt(t){
-  const b = t.split('.')[1].replace(/-/g,'+').replace(/_/g,'/');
-  return JSON.parse(atob(b));
 }
 
-// 4. JSONP wrapper
-function callServer(params, cb){
-  const callbackName = 'cb_' + Date.now();
-  window[callbackName] = data => {
-    delete window[callbackName];
-    document.body.removeChild(script);
-    cb(data);
+/* ─────────── 3. Logic Start/Stop ─────────── */
+let isOn = false, timerId = null;
+
+async function sendOnce(){
+  try{
+    status('⏳ GPS…');
+    const pos = await new Promise((ok,err)=>
+      navigator.geolocation.getCurrentPosition(ok,err,{timeout:10000})
+    );
+    const {latitude:lat, longitude:lon} = pos.coords;
+    sendLocation($('unit').value,$('emp').value,$('shift').value,lat,lon);
+  }catch(e){ status('❌ GPS lỗi: '+e.message); }
+}
+
+$('btn').onclick = async ()=>{
+  if (!isOn){
+    isOn = true;
+    $('btn').textContent = 'Kết thúc ca';
+    status('🚀 Bắt đầu ca…');
+    await sendOnce();                               // gửi ngay
+    timerId = setInterval(sendOnce, 5000);          // 5 giây
+  }else{
+    isOn = false;
+    $('btn').textContent = 'Bắt đầu ca';
+    clearInterval(timerId);
+    await sendOnce();                               // gửi lượt cuối
+    status('🏁 Đã kết thúc ca');
+  }
+};
+
+/* ─────────── 4. Khởi tạo ─────────── */
+window.addEventListener('load', ()=>{
+  loadUnits();
+  $('unit').onchange = e=>{
+    const u = e.target.value;
+    $('btn').disabled = !u;
+    if (u) loadEmployees(u);
+    else $('emp').innerHTML = '<option value="">— Nhân viên —</option>';
   };
-  const q = new URLSearchParams(params);
-  q.set('callback', callbackName);
-  const script = document.createElement('script');
-  script.src = SCRIPT_URL + '?' + q.toString();
-  document.body.appendChild(script);
-}
-
-// 5. Khi Google Sign-in thành công
-function onGoogleSignIn(resp){
-  const pl = decodeJwt(resp.credential);
-  const email = pl.email.toLowerCase();
-  console.log('JWT email:', email);
-  callServer({ action:'login', email }, rs=>{
-    console.log('LOGIN RESPONSE', rs);
-    if(rs.status==='ok'){
-      me = rs;
-      showApp();
-    } else {
-      alert('Bạn không thuộc ca trực');
-    }
-  });
-}
-
-// 6. Hiển thị UI chính sau login
-function showApp(){
-  document.getElementById('loginSec').hidden = true;
-  document.getElementById('app').hidden      = false;
-  document.getElementById('welcome').textContent =
-    `Xin chào ${me.name} (${me.unit})`;
-
-  document.getElementById('btnStart').onclick  = startShift;
-  document.getElementById('btnEnd').onclick    = endShift;
-  document.getElementById('btnInfo').onclick   = showInfo;
-  document.getElementById('btnLogout').onclick = logout;
-}
-
-// 7. Bắt đầu ca
-function startShift(){
-  callServer({ action:'startShift', email:me.email, ca:me.ca }, rs=>{
-    if(rs.status==='ok'){
-      alert('Bắt đầu ca thành công');
-      btnStart.hidden = true;
-      btnEnd.hidden   = false;
-    } else {
-      alert('Lỗi khi bắt đầu ca');
-    }
-  });
-}
-
-// 8. Kết thúc ca
-function endShift(){
-  callServer({ action:'endShift', email:me.email }, rs=>{
-    if(rs.status==='ok'){
-      alert('Kết thúc ca thành công');
-      btnStart.hidden = false;
-      btnEnd.hidden   = true;
-    } else {
-      alert('Lỗi khi kết thúc ca');
-    }
-  });
-}
-
-// 9. Thông tin nhân viên
-function showInfo(){
-  alert(`Thông tin nhân viên:\n
-    Tên: ${me.name}\n
-    Đơn vị: ${me.unit}\n
-    Mã NV: ${me.id}\n
-    Ca: ${me.ca}
-  `);
-}
-
-// 10. Đăng xuất
-function logout(){
-  me = {};
-  document.getElementById('app').hidden      = true;
-  document.getElementById('loginSec').hidden = false;
-  google.accounts.id.disableAutoSelect();
-}
+});
