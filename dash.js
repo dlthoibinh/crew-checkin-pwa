@@ -1,7 +1,7 @@
 /**************************************************************
  *  dash.js – Giám sát vị trí thời gian thực
  **************************************************************/
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykV_rM5_qD58eKqncGZam6UbEnadXWEoDVOzfQXyUtpfSp8LNXLy4c6TL0YEe4b_gBdQ/exec';  // ← thay
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxNwP7WG77tFYs8CRz6-e9-HwueWDo3m62BgWnSiHju/exec';  // ← thay
 const REFRESH_MS = 15_000;
 const $=id=>document.getElementById(id);
 const qs=o=>new URLSearchParams(o).toString();
