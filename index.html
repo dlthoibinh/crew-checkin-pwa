@@ -1,6 +1,11 @@
 <!doctype html>
 <html lang="vi">
 <head>
+  <!-- PWA & CSP (fix mixed-content/HTTPS) -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>MAP TRỰC CA</title>
@@ -30,18 +35,25 @@
   -->
 
   <!-- Đăng ký Service Worker đúng scope (bắt buộc cho PWABuilder) -->
-  <script>
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
-        try {
-          const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
-          reg.addEventListener('updatefound', () => console.log('SW update found'));
-          console.log('SW registered:', reg.scope);
-        } catch (e) {
-          console.warn('SW register failed', e);
-        }
-      });
-    }
-  </script>
+<script>
+  // Đăng ký SW với scope tuyệt đối theo repo GitHub Pages (fix "registration timeout")
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', async () => {
+      try {
+        // VD site: https://dlthoibinh.github.io/crew-checkin-pwa/
+        // scope sẽ là "/crew-checkin-pwa/"
+        const basePath = location.pathname.replace(/[^/]+$/, '');
+        const swUrl    = basePath + 'sw.js';
+        const scope    = basePath;                 // ví dụ "/crew-checkin-pwa/"
+
+        const reg = await navigator.serviceWorker.register(swUrl, { scope });
+        await navigator.serviceWorker.ready;       // đợi active
+        console.log('SW OK @', reg.scope);
+      } catch (e) {
+        console.warn('SW register failed', e);
+      }
+    });
+  }
+</script>
 </body>
 </html>
