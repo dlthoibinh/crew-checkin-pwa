@@ -1,6 +1,6 @@
-/* sw.js */
-const CACHE = 'evn-duty-v3';
-const APP_SHELL = [
+/* sw.js – cache cơ bản + network-first cho API Apps Script */
+const CACHE = 'evn-duty-v4';
+const SHELL = [
   './',
   './index.html',
   './manifest.webmanifest',
@@ -11,7 +11,7 @@ const APP_SHELL = [
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL)));
+  e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)));
 });
 
 self.addEventListener('activate', (e) => {
@@ -22,7 +22,7 @@ self.addEventListener('activate', (e) => {
   );
 });
 
-// API (Apps Script) -> network-first; tài nguyên khác -> stale-while-revalidate
+// API Apps Script -> network-first; còn lại -> stale-while-revalidate
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   const isAPI = url.hostname.endsWith('script.google.com');
@@ -35,13 +35,13 @@ self.addEventListener('fetch', (e) => {
   }
 
   e.respondWith(
-    caches.match(e.request).then((cached) => {
-      const fetchPromise = fetch(e.request).then((net) => {
-        const copy = net.clone();
+    caches.match(e.request).then(cached => {
+      const netFetch = fetch(e.request).then(resp => {
+        const copy = resp.clone();
         caches.open(CACHE).then(c => c.put(e.request, copy));
-        return net;
+        return resp;
       }).catch(() => cached || caches.match('./'));
-      return cached || fetchPromise;
+      return cached || netFetch;
     })
   );
 });
