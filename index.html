@@ -9,20 +9,25 @@
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0ea5e9">
   <link rel="apple-touch-icon" href="evn_logo.png">
+  <link rel="canonical" href="https://dlthoibinh.github.io/crew-checkin-pwa/">
+
+  <!-- iOS -->
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- CSP: cho phép iframe GAS, chặn mixed-content -->
+  <!-- CSP: cấm mixed-content, chỉ cho phép những domain cần -->
   <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self';
-                 frame-src https://script.google.com https://*.googleusercontent.com;
-                 connect-src 'self' https://script.google.com https://*.googleusercontent.com;
-                 img-src 'self' data: https:;
-                 style-src 'self' 'unsafe-inline';
-                 script-src 'self';
-                 base-uri 'self';
-                 form-action 'none';
-                 upgrade-insecure-requests">
+        content="
+          default-src 'self';
+          frame-src https://script.google.com https://*.googleusercontent.com;
+          connect-src 'self' https://script.google.com https://*.googleusercontent.com;
+          img-src 'self' data: https:;
+          style-src 'self' 'unsafe-inline';
+          script-src 'self';
+          base-uri 'self';
+          form-action 'none';
+          block-all-mixed-content;
+        ">
 
   <style>
     html,body{height:100%;margin:0;background:#f6f7fb;font-family:system-ui,Roboto,Arial}
@@ -53,20 +58,18 @@
   </div>
 
   <script>
-    // Base động cho sub-path GitHub Pages (…/crew-checkin-pwa/)
+    // Tự suy ra BASE đúng khi host dưới sub-path (…/crew-checkin-pwa/)
     const BASE = (location.pathname.endsWith('/')
       ? location.pathname
       : location.pathname.replace(/\/[^/]*$/, '/'));
 
-    // Đăng ký Service Worker đúng scope
     if ('serviceWorker' in navigator) {
-      const swUrl = BASE + 'sw.js';
-      navigator.serviceWorker.register(swUrl, { scope: BASE })
+      navigator.serviceWorker.register(BASE + 'sw.js', { scope: BASE })
         .then(r => console.log('SW registered:', r.scope))
         .catch(e => console.warn('SW register failed:', e));
     }
 
-    // UI offline
+    // Offline UI
     const setOfflineUI = on => document.getElementById('offline').classList.toggle('show', !!on);
     addEventListener('online',  ()=>setOfflineUI(false));
     addEventListener('offline', ()=>setOfflineUI(true));
