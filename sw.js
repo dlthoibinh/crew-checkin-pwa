@@ -1,5 +1,5 @@
 // bump version để force update mỗi lần deploy
-const CACHE = 'evn-duty-shell-v2';
+const CACHE = 'MAP TRỰC CA-v2';
 const ASSETS = [
   '/',
   '/index.html',
