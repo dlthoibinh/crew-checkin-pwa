@@ -11,6 +11,8 @@
   <link rel="apple-touch-icon" href="./evn_logo.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <!-- Nếu PWABuilder vẫn báo mixed content, giữ meta này -->
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 
   <style>
@@ -26,7 +28,7 @@
 <body>
   <div class="app">
     <div id="wrap">
-      <!-- Thay URL này bằng Web App Apps Script của anh nếu cần -->
+      <!-- Web App Apps Script của anh (bắt buộc HTTPS) -->
       <iframe id="app"
         src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
         allow="geolocation *; fullscreen *; camera *; microphone *; clipboard-read; clipboard-write; accelerometer; gyroscope; magnetometer"
@@ -43,19 +45,16 @@
   </div>
 
   <script>
-    // Đăng ký Service Worker đúng scope cho GitHub Pages
+    // Đăng ký Service Worker NGAY (không chờ window.load) để tránh timeout của PWABuilder
     if ('serviceWorker' in navigator) {
-      window.addEventListener('load', async () => {
+      (async () => {
         try {
-          const basePath = location.pathname.replace(/[^/]+$/, ''); // "/<repo>/"
-          const swUrl = basePath + 'sw.js';
-          await navigator.serviceWorker.register(swUrl, { scope: basePath });
-          await navigator.serviceWorker.ready;
-          console.log('SW registered @', basePath);
-        } catch (e) {
-          console.warn('SW register failed', e);
-        }
-      });
+          const base = location.pathname.replace(/[^/]+$/, ''); // "/<repo>/"
+          await navigator.serviceWorker.register(base + 'sw.js', { scope: base });
+          // Không await navigator.serviceWorker.ready để khỏi bị timeout trong tool
+          console.log('SW registered:', base);
+        } catch (e) { console.warn('SW register failed', e); }
+      })();
     }
 
     // UI Offline
