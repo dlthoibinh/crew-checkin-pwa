@@ -1,7 +1,7 @@
 {
   "name": "Trực ca",
   "short_name": "Trực ca",
-  "id": "/crew-checkin-pwa",                  // ID riêng cho app (fix 'id must be a string')
+  "id": "/crew-checkin-pwa",                  
   "description": "Bản đồ trực ca EVN-SPC: xem vị trí nhân viên, bắt/kết ca, xem lộ trình 12h.",
   "start_url": "/crew-checkin-pwa/?source=pwa",
   "scope": "/crew-checkin-pwa/",
