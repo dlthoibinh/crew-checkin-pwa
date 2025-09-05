@@ -1,21 +1,47 @@
 <!doctype html>
 <html lang="vi">
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>MAP TRỰC CA</title>
-<link rel="manifest" href="manifest.webmanifest">
-<meta name="theme-color" content="#0ea5e9">
-<style>
-  html,body,iframe{height:100%;width:100%;margin:0}
-  body{background:#f6f7fb;overscroll-behavior:none}
-  /* không còn header nên không có gì che map */
-</style>
-<iframe id="app"
-  src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
-  allow="geolocation *; fullscreen; microphone *; camera *"
-  referrerpolicy="no-referrer-when-downgrade"></iframe>
-<script>
-  // SW để PWA hoá (không ảnh hưởng app bên trong)
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js');
-</script>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>MAP TRỰC CA</title>
+
+  <!-- PWA essentials -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0ea5e9">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+
+  <!-- Icons (đã có sẵn trong repo) -->
+  <link rel="icon" sizes="192x192" href="./icon-192.png">
+  <link rel="icon" sizes="512x512" href="./icon-512.png">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
+  <style>
+    /* Không bắt buộc – chỉ để tránh flash trắng khi load */
+    html,body{height:100%;margin:0;background:#f6f7fb;color:#0f172a;font-family:system-ui,Roboto,Arial}
+  </style>
+</head>
+<body>
+
+  <!-- ===== Giữ NGUYÊN toàn bộ mã ứng dụng hiện có của anh ở đây =====
+       Nếu trước nay index.html đã chứa toàn bộ app (Leaflet, v.v.) thì
+       không cần đổi gì phần thân trang. Chỉ đảm bảo có <script> đăng ký SW
+       ngay bên dưới. 
+  -->
+
+  <!-- Đăng ký Service Worker đúng scope (bắt buộc cho PWABuilder) -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const reg = await navigator.serviceWorker.register('./sw.js', { scope: './' });
+          reg.addEventListener('updatefound', () => console.log('SW update found'));
+          console.log('SW registered:', reg.scope);
+        } catch (e) {
+          console.warn('SW register failed', e);
+        }
+      });
+    }
+  </script>
+</body>
 </html>
