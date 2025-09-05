@@ -6,14 +6,23 @@
   <title>MAP TRỰC CA</title>
 
   <!-- Manifest & PWA -->
-  <link rel="manifest" href="/crew-checkin-pwa/manifest.webmanifest">
+  <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#0ea5e9">
-  <link rel="apple-touch-icon" href="/crew-checkin-pwa/evn_logo.png">
+  <link rel="apple-touch-icon" href="evn_logo.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Đỡ bị mixed-content khi scan -->
-  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
+  <!-- CSP: cho phép iframe GAS, chặn mixed-content -->
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self';
+                 frame-src https://script.google.com https://*.googleusercontent.com;
+                 connect-src 'self' https://script.google.com https://*.googleusercontent.com;
+                 img-src 'self' data: https:;
+                 style-src 'self' 'unsafe-inline';
+                 script-src 'self';
+                 base-uri 'self';
+                 form-action 'none';
+                 upgrade-insecure-requests">
 
   <style>
     html,body{height:100%;margin:0;background:#f6f7fb;font-family:system-ui,Roboto,Arial}
@@ -44,14 +53,17 @@
   </div>
 
   <script>
-    // Đăng ký SW NGAY với scope cố định /crew-checkin-pwa/
+    // Base động cho sub-path GitHub Pages (…/crew-checkin-pwa/)
+    const BASE = (location.pathname.endsWith('/')
+      ? location.pathname
+      : location.pathname.replace(/\/[^/]*$/, '/'));
+
+    // Đăng ký Service Worker đúng scope
     if ('serviceWorker' in navigator) {
-      (async () => {
-        try {
-          await navigator.serviceWorker.register('/crew-checkin-pwa/sw.js', { scope: '/crew-checkin-pwa/' });
-          console.log('SW registered');
-        } catch (e) { console.warn('SW register failed', e); }
-      })();
+      const swUrl = BASE + 'sw.js';
+      navigator.serviceWorker.register(swUrl, { scope: BASE })
+        .then(r => console.log('SW registered:', r.scope))
+        .catch(e => console.warn('SW register failed:', e));
     }
 
     // UI offline
