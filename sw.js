@@ -1,5 +1,8 @@
-const CACHE = 'crew-pwa-v5';
-const BASE = '/crew-checkin-pwa/';
+// Xác định BASE động từ URL của chính SW (an toàn cho sub-path)
+const BASE = new URL('./', self.location).pathname; // vd: "/crew-checkin-pwa/"
+const CACHE = 'crew-pwa-v6';
+
+// Precache các asset tĩnh trong scope
 const STATIC_ASSETS = [
   BASE,
   BASE + 'index.html',
@@ -22,17 +25,19 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  const url = new URL(e.request.url);
+  const req = e.request;
+  const url = new URL(req.url);
 
-  // Chỉ cache tài nguyên cùng origin & trong scope
-  if (url.origin !== location.origin || !url.pathname.startsWith(BASE)) return;
+  // Chỉ xử lý cùng origin & trong scope BASE
+  if (url.origin !== self.location.origin || !url.pathname.startsWith(BASE)) return;
 
-  if (e.request.mode === 'navigate') {
+  // Điều hướng: network-first, fallback index.html (offline)
+  if (req.mode === 'navigate') {
     e.respondWith((async () => {
       try {
-        const fresh = await fetch(e.request);
+        const fresh = await fetch(req);
         const cache = await caches.open(CACHE);
-        cache.put(e.request, fresh.clone());
+        cache.put(req, fresh.clone());
         return fresh;
       } catch {
         const cache = await caches.open(CACHE);
@@ -42,12 +47,13 @@ self.addEventListener('fetch', (e) => {
     return;
   }
 
+  // Tài nguyên tĩnh: cache-first, update từ network khi cần
   e.respondWith((async () => {
     const cache = await caches.open(CACHE);
-    const cached = await cache.match(e.request);
+    const cached = await cache.match(req, { ignoreVary: true });
     if (cached) return cached;
-    const res = await fetch(e.request);
-    if (res.ok && e.request.method === 'GET') cache.put(e.request, res.clone());
+    const res = await fetch(req);
+    if (res.ok && req.method === 'GET') cache.put(req, res.clone());
     return res;
   })());
 });
