@@ -1,11 +1,12 @@
-const CACHE = 'crew-pwa-v4';
+const CACHE = 'crew-pwa-v5';
+const BASE = '/crew-checkin-pwa/';
 const STATIC_ASSETS = [
-  './',
-  './index.html',
-  './manifest.webmanifest',
-  './icon-192.png',
-  './icon-512.png',
-  './evn_logo.png'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'manifest.webmanifest',
+  BASE + 'icon-192.png',
+  BASE + 'icon-512.png',
+  BASE + 'evn_logo.png'
 ];
 
 self.addEventListener('install', (e) => {
@@ -22,7 +23,9 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (url.origin !== location.origin) return;
+
+  // Chỉ cache tài nguyên cùng origin & trong scope
+  if (url.origin !== location.origin || !url.pathname.startsWith(BASE)) return;
 
   if (e.request.mode === 'navigate') {
     e.respondWith((async () => {
@@ -33,7 +36,7 @@ self.addEventListener('fetch', (e) => {
         return fresh;
       } catch {
         const cache = await caches.open(CACHE);
-        return (await cache.match('./')) || (await cache.match('/'));
+        return (await cache.match(BASE + 'index.html')) || Response.error();
       }
     })());
     return;
