@@ -1,32 +1,47 @@
-// bump version để force update mỗi lần deploy
-const CACHE = 'MAP TRỰC CA-v2';
-const ASSETS = [
-  '/',
-  '/index.html',
-  '/manifest.webmanifest',
-  '/icon-192.png',
-  '/icon-512.png',
-  '/evn_logo.png'
+/* sw.js */
+const CACHE = 'evn-duty-v3';
+const APP_SHELL = [
+  './',
+  './index.html',
+  './manifest.webmanifest',
+  './icon-192.png',
+  './icon-512.png',
+  './evn_logo.png'
 ];
 
-self.addEventListener('install', e => {
-  e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)));
+self.addEventListener('install', (e) => {
   self.skipWaiting();
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(APP_SHELL)));
 });
 
-self.addEventListener('activate', e => {
+self.addEventListener('activate', (e) => {
   e.waitUntil(
-    caches.keys().then(keys => Promise.all(keys.map(k => k !== CACHE && caches.delete(k))))
+    caches.keys().then(keys =>
+      Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    ).then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
-// Chỉ cache file cùng origin (shell). Nội dung iframe Apps Script không cache ở đây.
-self.addEventListener('fetch', e => {
+// API (Apps Script) -> network-first; tài nguyên khác -> stale-while-revalidate
+self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
-  if (url.origin === location.origin) {
+  const isAPI = url.hostname.endsWith('script.google.com');
+
+  if (isAPI) {
     e.respondWith(
-      caches.match(e.request).then(r => r || fetch(e.request).catch(() => caches.match('/index.html')))
+      fetch(e.request).then(r => r).catch(() => caches.match(e.request))
     );
+    return;
   }
+
+  e.respondWith(
+    caches.match(e.request).then((cached) => {
+      const fetchPromise = fetch(e.request).then((net) => {
+        const copy = net.clone();
+        caches.open(CACHE).then(c => c.put(e.request, copy));
+        return net;
+      }).catch(() => cached || caches.match('./'));
+      return cached || fetchPromise;
+    })
+  );
 });
