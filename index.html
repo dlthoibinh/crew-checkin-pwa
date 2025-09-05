@@ -12,7 +12,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Nếu PWABuilder vẫn báo mixed content, giữ meta này -->
+  <!-- Giúp PWABuilder không báo mixed content -->
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 
   <style>
@@ -28,7 +28,6 @@
 <body>
   <div class="app">
     <div id="wrap">
-      <!-- Web App Apps Script của anh (bắt buộc HTTPS) -->
       <iframe id="app"
         src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
         allow="geolocation *; fullscreen *; camera *; microphone *; clipboard-read; clipboard-write; accelerometer; gyroscope; magnetometer"
@@ -45,22 +44,21 @@
   </div>
 
   <script>
-    // Đăng ký Service Worker NGAY (không chờ window.load) để tránh timeout của PWABuilder
+    // Đăng ký SW NGAY để tránh "registration timeout"
     if ('serviceWorker' in navigator) {
       (async () => {
         try {
-          const base = location.pathname.replace(/[^/]+$/, ''); // "/<repo>/"
+          const base = location.pathname.replace(/[^/]+$/, ''); // "/crew-checkin-pwa/"
           await navigator.serviceWorker.register(base + 'sw.js', { scope: base });
-          // Không await navigator.serviceWorker.ready để khỏi bị timeout trong tool
-          console.log('SW registered:', base);
+          console.log('SW registered with scope:', base);
         } catch (e) { console.warn('SW register failed', e); }
       })();
     }
 
-    // UI Offline
+    // UI offline
     const setOfflineUI = on => document.getElementById('offline').classList.toggle('show', !!on);
-    window.addEventListener('online',  ()=>setOfflineUI(false));
-    window.addEventListener('offline', ()=>setOfflineUI(true));
+    addEventListener('online',  ()=>setOfflineUI(false));
+    addEventListener('offline', ()=>setOfflineUI(true));
     setOfflineUI(!navigator.onLine);
   </script>
 </body>
