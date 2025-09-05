@@ -1,79 +1,68 @@
 <!doctype html>
 <html lang="vi">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>MAP TRỰC CA</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>MAP TRỰC CA</title>
 
-<!-- PWA -->
-<link rel="manifest" href="/manifest.webmanifest">
-<meta name="theme-color" content="#0ea5e9">
-<link rel="apple-touch-icon" href="/evn_logo.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <!-- PWA -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#0ea5e9">
+  <link rel="apple-touch-icon" href="./evn_logo.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 
-<style>
-html,body{height:100%;margin:0;background:#f6f7fb;font-family:system-ui,Roboto,Arial}
-.app{position:fixed;inset:0;display:flex;flex-direction:column}
-header{position:fixed;left:8px;top:8px;z-index:10;display:flex;gap:8px}
-button{padding:10px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;font-weight:800;cursor:pointer}
-#wrap{flex:1;position:relative}
-iframe{position:absolute;inset:0;border:0;width:100%;height:100%}
-.offline{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#fff}
-.offline.show{display:flex}
-</style>
+  <style>
+    html,body{height:100%;margin:0;background:#f6f7fb;font-family:system-ui,Roboto,Arial}
+    .app{position:fixed;inset:0;display:flex;flex-direction:column}
+    #wrap{flex:1;position:relative}
+    iframe{position:absolute;inset:0;border:0;width:100%;height:100%}
+    .offline{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#fff}
+    .offline.show{display:flex}
+    .offline button{padding:10px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;font-weight:800;cursor:pointer}
+  </style>
 </head>
 <body>
-<div class="app">
-<header>
-<button id="btnReload">Làm mới</button>
-<button id="btnOpen">Mở ngoài trình duyệt</button>
-</header>
+  <div class="app">
+    <div id="wrap">
+      <!-- Thay URL này bằng Web App Apps Script của anh nếu cần -->
+      <iframe id="app"
+        src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
+        allow="geolocation *; fullscreen *; camera *; microphone *; clipboard-read; clipboard-write; accelerometer; gyroscope; magnetometer"
+        referrerpolicy="no-referrer"></iframe>
 
-<div id="wrap">
-<!-- thay URL này bằng Web App Apps Script của anh -->
-<iframe id="app"
-src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
-allow="geolocation *; fullscreen *; camera *; microphone *; clipboard-read; clipboard-write; accelerometer; gyroscope; magnetometer"
-referrerpolicy="no-referrer"></iframe>
+      <div id="offline" class="offline">
+        <div style="text-align:center">
+          <h2>Không có mạng</h2>
+          <p>Ứng dụng cần kết nối Internet để chạy.</p>
+          <button onclick="location.reload()">Thử lại</button>
+        </div>
+      </div>
+    </div>
+  </div>
 
-<div id="offline" class="offline">
-<div style="text-align:center">
-<h2>Không có mạng</h2>
-<p>Ứng dụng cần kết nối Internet để chạy.</p>
-<button onclick="location.reload()">Thử lại</button>
-</div>
-</div>
-</div>
-</div>
+  <script>
+    // Đăng ký Service Worker đúng scope cho GitHub Pages
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', async () => {
+        try {
+          const basePath = location.pathname.replace(/[^/]+$/, ''); // "/<repo>/"
+          const swUrl = basePath + 'sw.js';
+          await navigator.serviceWorker.register(swUrl, { scope: basePath });
+          await navigator.serviceWorker.ready;
+          console.log('SW registered @', basePath);
+        } catch (e) {
+          console.warn('SW register failed', e);
+        }
+      });
+    }
 
-<script>
-// Nút "Làm mới": xóa cache/app state & ép reload cứng
-document.getElementById('btnReload').onclick = async () => {
-try{ localStorage.clear(); sessionStorage.clear(); }catch(_){}
-if ('caches' in window) {
-const keys = await caches.keys();
-await Promise.all(keys.map(k => caches.delete(k)));
-}
-const url = location.href.split('#')[0].replace(/\?r=\d+$/,'');
-location.replace(url + (url.includes('?') ? '&' : '?') + 'r=' + Date.now());
-};
-
-// Mở ngoài (đề phòng khi cần đăng nhập Google)
-document.getElementById('btnOpen').onclick = () => {
-window.open(document.getElementById('app').src, '_blank', 'noopener,noreferrer');
-};
-
-// Đăng ký SW
-if ('serviceWorker' in navigator) {
-window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js'));
-}
-
-// UI offline
-const setOfflineUI = on => document.getElementById('offline').classList.toggle('show', !!on);
-window.addEventListener('online',  ()=>setOfflineUI(false));
-window.addEventListener('offline', ()=>setOfflineUI(true));
-setOfflineUI(!navigator.onLine);
-</script>
+    // UI Offline
+    const setOfflineUI = on => document.getElementById('offline').classList.toggle('show', !!on);
+    window.addEventListener('online',  ()=>setOfflineUI(false));
+    window.addEventListener('offline', ()=>setOfflineUI(true));
+    setOfflineUI(!navigator.onLine);
+  </script>
 </body>
 </html>
