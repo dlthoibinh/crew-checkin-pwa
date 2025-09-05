@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>EVN-SPC Duty</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="/manifest.webmanifest">
+  <meta name="theme-color" content="#0ea5e9">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+  <style>
+    html,body {height:100%;margin:0;background:#f6f7fb;font-family:system-ui,Roboto,Arial}
+    .app {position:fixed;inset:0;display:flex;flex-direction:column}
+    header {position:fixed;left:8px;top:8px;z-index:10;display:flex;gap:8px}
+    button {padding:10px 14px;border-radius:999px;border:1px solid #e5e7eb;background:#fff;font-weight:800;cursor:pointer}
+    #wrap {flex:1;position:relative}
+    iframe {position:absolute;inset:0;border:0;width:100%;height:100%}
+    .offline {position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:#fff}
+    .offline.show {display:flex}
+  </style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button id="btnReload">Làm mới</button>
+    <button id="btnOpen">Mở ngoài trình duyệt</button>
+  </header>
+
+  <div id="wrap">
+    <iframe id="app" 
+      src="https://script.google.com/macros/s/AKfycbz4wd2wDQboCASWQIsczvoI68FSMLVjKDn9WZnAzP38pY_l2H3p7WdPoCtcjAYnQMI_Jg/exec"
+      allow="geolocation *; fullscreen *; camera *; microphone *; clipboard-read; clipboard-write; accelerometer; gyroscope; magnetometer"
+      referrerpolicy="no-referrer"
+      ></iframe>
+
+    <div id="offline" class="offline">
+      <div>
+        <h2>Không có mạng</h2>
+        <p>Ứng dụng cần kết nối Internet để chạy.</p>
+        <div style="text-align:center;margin-top:10px">
+          <button onclick="location.reload()">Thử lại</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Nút thao tác
+  document.getElementById('btnReload').onclick = ()=>{
+    try{ localStorage.clear(); sessionStorage.clear(); }catch(_){}
+    // reload cưỡng bức
+    location.href = location.href.split('#')[0]
+      .replace(/\?r=\d+$/,'') + (location.search ? '&' : '?') + 'r=' + Date.now();
+  };
+  document.getElementById('btnOpen').onclick = ()=>{
+    const url = document.getElementById('app').src;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  };
+
+  // PWA SW
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', ()=> navigator.serviceWorker.register('/sw.js'));
+  }
+
+  // Hiện overlay khi offline
+  function setOfflineUI(on){ document.getElementById('offline').classList.toggle('show', !!on); }
+  window.addEventListener('online', ()=>setOfflineUI(false));
+  window.addEventListener('offline', ()=>setOfflineUI(true));
+  setOfflineUI(!navigator.onLine);
+</script>
+</body>
+</html>
