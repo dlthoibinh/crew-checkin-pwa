@@ -58,7 +58,6 @@
   </div>
 
   <script>
-    // Tự suy ra BASE đúng khi host dưới sub-path (…/crew-checkin-pwa/)
     const BASE = (location.pathname.endsWith('/')
       ? location.pathname
       : location.pathname.replace(/\/[^/]*$/, '/'));
@@ -69,7 +68,6 @@
         .catch(e => console.warn('SW register failed:', e));
     }
 
-    // Offline UI
     const setOfflineUI = on => document.getElementById('offline').classList.toggle('show', !!on);
     addEventListener('online',  ()=>setOfflineUI(false));
     addEventListener('offline', ()=>setOfflineUI(true));
