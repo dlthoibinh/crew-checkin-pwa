@@ -1,14 +1,25 @@
 {
   "name": "MAP TRỰC CA",
-  "short_name": "MAP TRỰC CA",
-  "start_url": "/",
-  "scope": "/",
+  "short_name": "Trực ca",
+  "description": "Bản đồ trực ca EVN-SPC: xem vị trí nhân viên, bắt/kết ca, xem lộ trình 12h.",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
-  "orientation": "portrait",
-  "background_color": "#f6f7fb",
+  "background_color": "#ffffff",
   "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ]
 }
