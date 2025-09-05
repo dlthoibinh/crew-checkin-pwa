@@ -1,18 +1,20 @@
 {
-  "name": "Trực ca",
+  "id": "./",
+  "name": "Trực ca EVN-SPC",
   "short_name": "Trực ca",
-  "id": "/crew-checkin-pwa",                 
   "description": "Bản đồ trực ca EVN-SPC: xem vị trí nhân viên, bắt/kết ca, xem lộ trình 12h.",
-  "start_url": "/crew-checkin-pwa/?source=pwa",
-  "scope": "/crew-checkin-pwa/",
+  "start_url": "./?source=pwa",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#ffffff",
   "theme_color": "#0ea5e9",
-  "orientation": "portrait-primary",
+  "categories": ["business", "productivity", "navigation"],
   "icons": [
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
-    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
-  ]
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "prefer_related_applications": false
 }
