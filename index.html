@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <title>MAP TRỰC CA</title>
 
-  <!-- PWA -->
-  <link rel="manifest" href="./manifest.webmanifest">
+  <!-- Manifest & PWA -->
+  <link rel="manifest" href="/crew-checkin-pwa/manifest.webmanifest">
   <meta name="theme-color" content="#0ea5e9">
-  <link rel="apple-touch-icon" href="./evn_logo.png">
+  <link rel="apple-touch-icon" href="/crew-checkin-pwa/evn_logo.png">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 
-  <!-- Giúp PWABuilder không báo mixed content -->
+  <!-- Đỡ bị mixed-content khi scan -->
   <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests">
 
   <style>
@@ -44,13 +44,12 @@
   </div>
 
   <script>
-    // Đăng ký SW NGAY để tránh "registration timeout"
+    // Đăng ký SW NGAY với scope cố định /crew-checkin-pwa/
     if ('serviceWorker' in navigator) {
       (async () => {
         try {
-          const base = location.pathname.replace(/[^/]+$/, ''); // "/crew-checkin-pwa/"
-          await navigator.serviceWorker.register(base + 'sw.js', { scope: base });
-          console.log('SW registered with scope:', base);
+          await navigator.serviceWorker.register('/crew-checkin-pwa/sw.js', { scope: '/crew-checkin-pwa/' });
+          console.log('SW registered');
         } catch (e) { console.warn('SW register failed', e); }
       })();
     }
