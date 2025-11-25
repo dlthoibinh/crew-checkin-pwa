@@ -1,5 +1,5 @@
 const BASE = new URL('./', self.location).pathname;
-const CACHE = 'crew-pwa-v6';
+const CACHE = 'crew-pwa-v7';
 
 const STATIC_ASSETS = [
   BASE,
